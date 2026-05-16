@@ -4,13 +4,26 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "run-s db:prepare dev:serve",
+    "dev:client": "vite",
+    "dev:serve": "run-p dev:server dev:client",
+    "dev:server": "node server/server.mjs",
     "build": "run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
+    "start": "run-s db:prepare start:server",
+    "start:server": "node server/server.mjs",
     "build-only": "vite build",
-    "type-check": "vue-tsc --build"
+    "type-check": "vue-tsc --build",
+    "db:prepare": "run-s db:generate db:push",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@prisma/adapter-better-sqlite3": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "better-sqlite3": "^12.10.0",
+    "dotenv": "^17.4.2",
     "vue": "^3.5.32"
   },
   "devDependencies": {
@@ -19,6 +32,7 @@
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue/tsconfig": "^0.9.1",
     "npm-run-all2": "^8.0.4",
+    "prisma": "^7.8.0",
     "typescript": "~6.0.0",
     "vite": "^8.0.8",
     "vite-plugin-vue-devtools": "^8.1.1",

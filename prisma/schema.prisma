@@ -1,0 +1,83 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Product {
+  id           Int         @id @default(autoincrement())
+  sku          String      @unique(map: "sqlite_autoindex_products_1")
+  name         String
+  category     String
+  description  String
+  price        Float
+  stock        Int         @default(0)
+  leadTimeDays Int         @default(1) @map("lead_time_days")
+  featured     Int         @default(0)
+  orderItems   OrderItem[]
+
+  @@map("products")
+}
+
+model Customer {
+  id           Int     @id @default(autoincrement())
+  fullName     String  @map("full_name")
+  email        String
+  phone        String
+  address      String
+  registeredAt String  @map("registered_at")
+  orders       Order[]
+
+  @@map("customers")
+}
+
+model AdminUser {
+  id           Int            @id @default(autoincrement())
+  username     String         @unique
+  displayName  String         @map("display_name")
+  passwordHash String         @map("password_hash")
+  createdAt    String         @map("created_at")
+  sessions     AdminSession[]
+
+  @@map("admin_users")
+}
+
+model AdminSession {
+  id               Int       @id @default(autoincrement())
+  sessionTokenHash String    @unique @map("session_token_hash")
+  adminUserId      Int       @map("admin_user_id")
+  createdAt        String    @map("created_at")
+  expiresAt        String    @map("expires_at")
+  adminUser        AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("admin_sessions")
+}
+
+model Order {
+  id             Int         @id @default(autoincrement())
+  customerId     Int         @map("customer_id")
+  deliveryMethod String      @map("delivery_method")
+  note           String      @default("")
+  total          Float
+  createdAt      String      @map("created_at")
+  items          OrderItem[]
+  customer       Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id          Int     @id @default(autoincrement())
+  orderId     Int     @map("order_id")
+  productId   Int     @map("product_id")
+  productName String  @map("product_name")
+  quantity    Int
+  unitPrice   Float   @map("unit_price")
+  lineTotal   Float   @map("line_total")
+  product     Product @relation(fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("order_items")
+}

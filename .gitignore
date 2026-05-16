@@ -13,6 +13,7 @@ dist
 dist-ssr
 coverage
 *.local
+.env
 
 # Editor directories and files
 .vscode/*
@@ -37,3 +38,9 @@ __screenshots__/
 
 # Vite
 *.timestamp-*-*.mjs
+
+# Local SQLite data
+server/data/*.sqlite*
+dev.db*
+
+/src/generated/prisma
