@@ -17,11 +17,13 @@ const form = reactive<RegistrationInput>({
   email: '',
   phone: '',
   address: '',
+  password: '',
 })
 
 const submitting = ref(false)
 const successMessage = ref('')
 const errorMessage = ref('')
+const showPassword = ref(false)
 
 const recentCustomer = computed(() => props.customers[0]?.fullName ?? 'No customers yet')
 
@@ -30,6 +32,7 @@ const resetForm = () => {
   form.email = ''
   form.phone = ''
   form.address = ''
+  form.password = ''
 }
 
 const handleSubmit = async () => {
@@ -39,7 +42,7 @@ const handleSubmit = async () => {
 
   try {
     const customer = await props.registerCustomer({ ...form })
-    successMessage.value = `${customer.fullName} has been added to the customer list.`
+    successMessage.value = `${customer.fullName} has been added to the customer list. You can sign in with this email now.`
     resetForm()
   } catch (error) {
     errorMessage.value =
@@ -53,7 +56,7 @@ const handleSubmit = async () => {
 <template>
   <section class="register-page" :style="{ '--register-image': `url(${heroImage})` }">
     <div class="register-shell">
-      <button type="button" class="back-link" @click="emit('navigate', 'admin')">
+      <button type="button" class="back-link" @click="emit('navigate', 'login')">
         <span class="back-link__icon" aria-hidden="true">
           <svg viewBox="0 0 24 24">
             <path
@@ -88,7 +91,7 @@ const handleSubmit = async () => {
 
         <header class="register-card__header">
           <h1>Create Customer Profile</h1>
-          <p>Register a buyer to get started with the Ordermoto System</p>
+          <p>Register a buyer and set their password for future customer sign-in</p>
         </header>
 
         <form class="register-form" @submit.prevent="handleSubmit">
@@ -189,6 +192,70 @@ const handleSubmit = async () => {
               <span class="section-label__icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24">
                   <path
+                    d="M7 10V7a5 5 0 0 1 10 0v3m-9 0h8a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2Z"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.8"
+                  />
+                </svg>
+              </span>
+              <strong>Account Access</strong>
+            </div>
+
+            <label class="field">
+              <span>Password</span>
+              <div class="field__control">
+                <span class="field__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path
+                      d="M7 10V7a5 5 0 0 1 10 0v3m-9 0h8a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2Z"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="1.8"
+                    />
+                  </svg>
+                </span>
+                <input
+                  v-model="form.password"
+                  :type="showPassword ? 'text' : 'password'"
+                  placeholder="Create a password"
+                  minlength="6"
+                  required
+                />
+                <button
+                  type="button"
+                  class="field__toggle"
+                  :aria-label="showPassword ? 'Hide password' : 'Show password'"
+                  @click="showPassword = !showPassword"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Zm10 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="1.8"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </label>
+            <p class="register-note">
+              Use this password with the customer email on the login page. Minimum length:
+              <strong>6 characters</strong>.
+            </p>
+          </section>
+
+          <section class="form-section">
+            <div class="section-label">
+              <span class="section-label__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path
                     d="M4 10.5 12 4l8 6.5V20H4zM9 20v-5h6v5"
                     fill="none"
                     stroke="currentColor"
@@ -257,8 +324,8 @@ const handleSubmit = async () => {
         </form>
 
         <p class="register-footer">
-          Already have admin access?
-          <button type="button" class="text-link" @click="emit('navigate', 'admin')">
+          Already have a customer account?
+          <button type="button" class="text-link" @click="emit('navigate', 'login')">
             Login here
           </button>
         </p>
@@ -285,7 +352,8 @@ const handleSubmit = async () => {
 }
 
 .back-link,
-.text-link {
+.text-link,
+.field__toggle {
   border: 0;
   background: transparent;
   cursor: pointer;
@@ -490,7 +558,8 @@ const handleSubmit = async () => {
   align-items: flex-start;
 }
 
-.field__icon {
+.field__icon,
+.field__toggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -498,7 +567,8 @@ const handleSubmit = async () => {
   flex-shrink: 0;
 }
 
-.field__icon svg {
+.field__icon svg,
+.field__toggle svg {
   width: 1.3rem;
   height: 1.3rem;
   fill: none;

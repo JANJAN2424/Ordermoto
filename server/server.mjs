@@ -8,18 +8,27 @@ import {
   createCustomer,
   createProduct,
   createOrder,
+  deleteProduct,
   getAdminSessionState,
+  getCustomerSessionState,
   getBootstrapData,
   initializeDatabase,
   listProducts,
+  listOrders,
   loginAdmin,
+  loginCustomer,
   logoutAdmin,
+  logoutCustomer,
+  updateOrderStatus,
+  updateProduct,
 } from './database.mjs'
 
 const defaultHost = '127.0.0.1'
 const defaultPort = 3001
 const adminSessionCookieName = 'ordermoto_admin_session'
 const adminSessionMaxAgeSeconds = 60 * 60 * 8
+const customerSessionCookieName = 'ordermoto_customer_session'
+const customerSessionMaxAgeSeconds = 60 * 60 * 8
 
 const contentTypes = {
   '.css': 'text/css; charset=utf-8',
@@ -126,6 +135,35 @@ const clearAdminSessionCookie = (response) => {
 
 const getAdminSessionToken = (request) =>
   parseCookies(request.headers.cookie ?? '')[adminSessionCookieName] ?? ''
+
+const setCustomerSessionCookie = (response, sessionToken) => {
+  response.setHeader(
+    'Set-Cookie',
+    serializeCookie(customerSessionCookieName, sessionToken, {
+      path: '/',
+      maxAge: customerSessionMaxAgeSeconds,
+      httpOnly: true,
+      sameSite: 'Lax',
+      secure: process.env.NODE_ENV === 'production',
+    }),
+  )
+}
+
+const clearCustomerSessionCookie = (response) => {
+  response.setHeader(
+    'Set-Cookie',
+    serializeCookie(customerSessionCookieName, '', {
+      path: '/',
+      maxAge: 0,
+      httpOnly: true,
+      sameSite: 'Lax',
+      secure: process.env.NODE_ENV === 'production',
+    }),
+  )
+}
+
+const getCustomerSessionToken = (request) =>
+  parseCookies(request.headers.cookie ?? '')[customerSessionCookieName] ?? ''
 
 const requireAdminSession = async (request, response) => {
   const sessionToken = getAdminSessionToken(request)
@@ -240,10 +278,30 @@ const createAppServer = () =>
         return
       }
 
+      if (request.method === 'GET' && requestUrl.pathname === '/api/customer/session') {
+        const sessionToken = getCustomerSessionToken(request)
+        const session = await getCustomerSessionState(sessionToken)
+
+        if (sessionToken && !session.authenticated) {
+          clearCustomerSessionCookie(response)
+        }
+
+        sendJson(response, 200, session)
+        return
+      }
+
       if (request.method === 'POST' && requestUrl.pathname === '/api/admin/login') {
         const payload = await readJsonBody(request)
         const { sessionToken, session } = await loginAdmin(payload)
         setAdminSessionCookie(response, sessionToken)
+        sendJson(response, 200, session)
+        return
+      }
+
+      if (request.method === 'POST' && requestUrl.pathname === '/api/customer/login') {
+        const payload = await readJsonBody(request)
+        const { sessionToken, session } = await loginCustomer(payload)
+        setCustomerSessionCookie(response, sessionToken)
         sendJson(response, 200, session)
         return
       }
@@ -255,6 +313,13 @@ const createAppServer = () =>
         return
       }
 
+      if (request.method === 'POST' && requestUrl.pathname === '/api/customer/logout') {
+        await logoutCustomer(getCustomerSessionToken(request))
+        clearCustomerSessionCookie(response)
+        sendJson(response, 200, { success: true })
+        return
+      }
+
       if (request.method === 'POST' && requestUrl.pathname === '/api/admin/products') {
         await requireAdminSession(request, response)
         const payload = await readJsonBody(request)
@@ -262,6 +327,39 @@ const createAppServer = () =>
         sendJson(response, 201, {
           product,
           products: await listProducts(),
+        })
+        return
+      }
+
+      if (request.method === 'POST' && requestUrl.pathname === '/api/admin/products/update') {
+        await requireAdminSession(request, response)
+        const payload = await readJsonBody(request)
+        const product = await updateProduct(payload)
+        sendJson(response, 200, {
+          product,
+          products: await listProducts(),
+        })
+        return
+      }
+
+      if (request.method === 'POST' && requestUrl.pathname === '/api/admin/products/delete') {
+        await requireAdminSession(request, response)
+        const payload = await readJsonBody(request)
+        await deleteProduct(payload)
+        sendJson(response, 200, {
+          success: true,
+          products: await listProducts(),
+        })
+        return
+      }
+
+      if (request.method === 'POST' && requestUrl.pathname === '/api/admin/orders/status') {
+        await requireAdminSession(request, response)
+        const payload = await readJsonBody(request)
+        const order = await updateOrderStatus(payload)
+        sendJson(response, 200, {
+          order,
+          orders: await listOrders(),
         })
         return
       }

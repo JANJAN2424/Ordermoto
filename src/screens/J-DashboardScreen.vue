@@ -28,9 +28,9 @@ const featuredProducts = computed(() =>
 
 const latestOrder = computed(() => props.orders[0] ?? null)
 
-const currencyFormatter = new Intl.NumberFormat('en-US', {
+const currencyFormatter = new Intl.NumberFormat('en-PH', {
   style: 'currency',
-  currency: 'USD',
+  currency: 'PHP',
   maximumFractionDigits: 0,
 })
 

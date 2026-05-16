@@ -1,5 +1,22 @@
-export type RouteKey = 'home' | 'dashboard' | 'about' | 'registration' | 'orders' | 'admin'
+export type RouteKey =
+  | 'dashboard'
+  | 'about'
+  | 'registration'
+  | 'orders'
+  | 'order-history'
+  | 'admin'
+  | 'admin-inventory'
+  | 'admin-products'
+  | 'admin-customers'
+  | 'login'
 export type DeliveryMethod = 'Showroom pickup' | 'Home delivery'
+export type OrderStatus =
+  | 'Pending'
+  | 'Preparing'
+  | 'Ready for pickup'
+  | 'On delivery'
+  | 'Delivered'
+  | 'Cancelled'
 
 export interface Product {
   id: number
@@ -35,6 +52,12 @@ export interface AdminSessionState {
   expiresAt: string | null
 }
 
+export interface CustomerSessionState {
+  authenticated: boolean
+  customer: Customer | null
+  expiresAt: string | null
+}
+
 export interface OrderItem {
   productId: number
   productName: string
@@ -48,6 +71,7 @@ export interface Order {
   customerId: number
   customerName: string
   deliveryMethod: DeliveryMethod
+  status: OrderStatus
   note: string
   total: number
   createdAt: string
@@ -59,6 +83,12 @@ export interface RegistrationInput {
   email: string
   phone: string
   address: string
+  password: string
+}
+
+export interface CustomerLoginInput {
+  email: string
+  password: string
 }
 
 export interface CreateOrderInput {
@@ -82,6 +112,15 @@ export interface CreateProductInput {
   featured: boolean
 }
 
+export interface UpdateProductInput extends CreateProductInput {
+  id: number
+}
+
+export interface UpdateOrderStatusInput {
+  orderId: number
+  status: OrderStatus
+}
+
 export interface BootstrapData {
   products: Product[]
   customers: Customer[]
@@ -101,4 +140,19 @@ export interface OrderSubmissionResponse {
 export interface CreateProductResponse {
   product: Product
   products: Product[]
+}
+
+export interface UpdateProductResponse {
+  product: Product
+  products: Product[]
+}
+
+export interface DeleteProductResponse {
+  success: true
+  products: Product[]
+}
+
+export interface UpdateOrderStatusResponse {
+  order: Order
+  orders: Order[]
 }

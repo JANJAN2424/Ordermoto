@@ -2,7 +2,6 @@
 import { computed, reactive, ref, watch } from 'vue'
 import CurrentOrderPanel from '../components/orders/J-CurrentOrderPanel.vue'
 import OrderBuilder from '../components/orders/J-OrderBuilder.vue'
-import OrdersHistory from '../components/orders/J-OrdersHistory.vue'
 import type {
   CreateOrderInput,
   Customer,
@@ -14,7 +13,8 @@ import type {
 const props = defineProps<{
   products: Product[]
   customers: Customer[]
-  orders: Order[]
+  activeCustomerId: number | null
+  activeCustomerName: string
   createOrder: (payload: CreateOrderInput) => Promise<Order>
 }>()
 
@@ -25,13 +25,23 @@ const submitting = ref(false)
 const successMessage = ref('')
 const errorMessage = ref('')
 const quantities = reactive<Record<number, number>>({})
+const lockedToActiveCustomer = computed(() => props.activeCustomerId !== null)
 
 watch(
-  () => props.customers,
-  (customers) => {
+  [() => props.customers, () => props.activeCustomerId],
+  ([customers, activeCustomerId]) => {
     if (customers.length === 0) {
       selectedCustomerId.value = null
       return
+    }
+
+    if (activeCustomerId !== null) {
+      const signedInCustomer = customers.find((customer) => customer.id === activeCustomerId)
+
+      if (signedInCustomer) {
+        selectedCustomerId.value = signedInCustomer.id
+        return
+      }
     }
 
     const currentSelectionExists = customers.some((customer) => customer.id === selectedCustomerId.value)
@@ -129,7 +139,10 @@ const submitOrder = async () => {
       <div class="order-toolbar__controls">
         <label>
           Customer
-          <select v-model="selectedCustomerId" :disabled="customers.length === 0">
+          <select
+            v-model="selectedCustomerId"
+            :disabled="customers.length === 0 || lockedToActiveCustomer"
+          >
             <option :value="null" disabled>Select customer</option>
             <option v-for="customer in customers" :key="customer.id" :value="customer.id">
               {{ customer.fullName }}
@@ -159,6 +172,9 @@ const submitOrder = async () => {
     <p v-if="customers.length === 0" class="notice">
       Register a customer first before creating an order.
     </p>
+    <p v-else-if="lockedToActiveCustomer" class="notice">
+      Signed in as {{ activeCustomerName }}. New orders will be saved to this customer profile.
+    </p>
     <p v-if="successMessage" class="notice notice--success">{{ successMessage }}</p>
     <p v-if="errorMessage" class="notice notice--error">{{ errorMessage }}</p>
 
@@ -170,7 +186,6 @@ const submitOrder = async () => {
           @increase="increaseQuantity"
           @decrease="decreaseQuantity"
         />
-        <OrdersHistory :orders="orders" />
       </div>
 
       <CurrentOrderPanel

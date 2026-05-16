@@ -1,18 +1,18 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
 import heroImage from '../assets/images/backgroundimg.jpg'
-import type { AdminLoginInput, AdminSessionState, RouteKey } from '../types/system'
+import type { CustomerLoginInput, CustomerSessionState, RouteKey } from '../types/system'
 
 const props = defineProps<{
-  loginAdmin: (payload: AdminLoginInput) => Promise<AdminSessionState>
+  loginCustomer: (payload: CustomerLoginInput) => Promise<CustomerSessionState>
 }>()
 
 const emit = defineEmits<{
   navigate: [route: RouteKey]
 }>()
 
-const form = reactive<AdminLoginInput>({
-  username: '',
+const form = reactive<CustomerLoginInput>({
+  email: '',
   password: '',
 })
 
@@ -25,10 +25,11 @@ const handleSubmit = async () => {
   errorMessage.value = ''
 
   try {
-    await props.loginAdmin({ ...form })
+    await props.loginCustomer({ ...form })
     form.password = ''
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'Unable to sign in as admin.'
+    errorMessage.value =
+      error instanceof Error ? error.message : 'Unable to sign in to the customer account.'
   } finally {
     submitting.value = false
   }
@@ -56,14 +57,14 @@ const handleSubmit = async () => {
         </div>
 
         <div class="auth-visual__copy">
-          <p class="auth-visual__eyebrow">Admin Login</p>
-          <h2>Welcome back to the protected Ordermoto workspace.</h2>
-          <p>Manage motorcycles, customers, and orders from one secure dashboard.</p>
+          <p class="auth-visual__eyebrow">Customer Login</p>
+          <h2>Sign in with the customer profile you created during registration.</h2>
+          <p>Continue to orders faster and keep purchases attached to the right buyer account.</p>
         </div>
       </aside>
 
       <section class="auth-card">
-        <button type="button" class="back-link" @click="emit('navigate', 'login')">
+        <button type="button" class="back-link" @click="emit('navigate', 'registration')">
           <span class="back-link__icon" aria-hidden="true">
             <svg viewBox="0 0 24 24">
               <path
@@ -76,7 +77,7 @@ const handleSubmit = async () => {
               />
             </svg>
           </span>
-          <span>Back to customer login</span>
+          <span>Back to registration</span>
         </button>
 
         <div class="auth-card__brand">
@@ -96,18 +97,18 @@ const handleSubmit = async () => {
         </div>
 
         <header class="auth-card__header">
-          <h1>Welcome Back!</h1>
-          <p>Sign in to continue to your account</p>
+          <h1>Customer Sign In</h1>
+          <p>Use the email and password created during customer registration</p>
         </header>
 
         <form class="auth-form" @submit.prevent="handleSubmit">
           <label class="field">
-            <span>Username</span>
+            <span>Email address</span>
             <div class="field__control">
               <span class="field__icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24">
                   <path
-                    d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8c0-3.3 3.1-6 7-6s7 2.7 7 6"
+                    d="M4 6h16v12H4zM4 7l8 6 8-6"
                     fill="none"
                     stroke="currentColor"
                     stroke-linecap="round"
@@ -117,9 +118,9 @@ const handleSubmit = async () => {
                 </svg>
               </span>
               <input
-                v-model="form.username"
-                type="text"
-                placeholder="Enter your username"
+                v-model="form.email"
+                type="email"
+                placeholder="Enter your email"
                 required
               />
             </div>
@@ -166,7 +167,7 @@ const handleSubmit = async () => {
             </div>
           </label>
 
-          <p class="auth-form__hint">Use the admin credentials configured in `.env`.</p>
+          <p class="auth-form__hint">Use the same email and password saved on the register page.</p>
 
           <p v-if="errorMessage" class="feedback feedback--error">{{ errorMessage }}</p>
 
@@ -176,9 +177,16 @@ const handleSubmit = async () => {
         </form>
 
         <p class="auth-footer">
-          Need a customer account instead?
-          <button type="button" class="text-link" @click="emit('navigate', 'login')">
-            Customer login
+          Need to create a customer profile?
+          <button type="button" class="text-link" @click="emit('navigate', 'registration')">
+            Register here
+          </button>
+        </p>
+
+        <p class="auth-footer auth-footer--secondary">
+          Need admin access?
+          <button type="button" class="text-link" @click="emit('navigate', 'admin')">
+            Admin login
           </button>
         </p>
       </section>
@@ -304,7 +312,7 @@ const handleSubmit = async () => {
 .auth-card {
   display: grid;
   align-content: start;
-  gap: 1.4rem;
+  gap: 1.1rem;
   border-radius: 2rem;
   background:
     radial-gradient(circle at top left, rgba(255, 255, 255, 0.95), transparent 30%),
@@ -459,6 +467,10 @@ const handleSubmit = async () => {
   text-align: center;
 }
 
+.auth-footer--secondary {
+  margin-top: -0.45rem;
+}
+
 .text-link {
   color: #ff6a00;
   font-weight: 800;
@@ -488,7 +500,7 @@ const handleSubmit = async () => {
   }
 
   .auth-card {
-    gap: 1.1rem;
+    gap: 1rem;
   }
 
   .auth-card__header h1 {

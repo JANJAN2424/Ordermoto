@@ -1,14 +1,22 @@
 <script setup lang="ts">
-import type { Order } from '../../types/system'
+import type { Order, OrderStatus } from '../../types/system'
 import StatusBadge from '../ui/J-StatusBadge.vue'
 
-defineProps<{
-  orders: Order[]
-}>()
+withDefaults(
+  defineProps<{
+    orders: Order[]
+    title?: string
+    helper?: string
+  }>(),
+  {
+    title: 'Products added by customers',
+    helper: 'Every saved order below comes from the SQLite order history.',
+  },
+)
 
-const currencyFormatter = new Intl.NumberFormat('en-US', {
+const currencyFormatter = new Intl.NumberFormat('en-PH', {
   style: 'currency',
-  currency: 'USD',
+  currency: 'PHP',
   maximumFractionDigits: 0,
 })
 
@@ -19,6 +27,13 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
 
 const formatCurrency = (value: number) => currencyFormatter.format(value)
 const formatDate = (value: string) => dateFormatter.format(new Date(value))
+
+const getStatusTone = (status: OrderStatus) => {
+  if (status === 'Delivered') return 'success'
+  if (status === 'Cancelled') return 'neutral'
+  if (status === 'On delivery' || status === 'Ready for pickup') return 'info'
+  return 'warning'
+}
 </script>
 
 <template>
@@ -26,9 +41,9 @@ const formatDate = (value: string) => dateFormatter.format(new Date(value))
     <div class="panel__header">
       <div>
         <p class="eyebrow">Saved orders</p>
-        <h2>Products added by customers</h2>
+        <h2>{{ title }}</h2>
       </div>
-      <p>Every saved order below comes from the SQLite order history.</p>
+      <p>{{ helper }}</p>
     </div>
 
     <div v-if="orders.length === 0" class="empty-state">
@@ -44,6 +59,7 @@ const formatDate = (value: string) => dateFormatter.format(new Date(value))
         </div>
 
         <div class="order-card__meta">
+          <StatusBadge :label="order.status" :tone="getStatusTone(order.status)" />
           <StatusBadge :label="order.deliveryMethod" tone="accent" />
           <strong>{{ formatCurrency(order.total) }}</strong>
         </div>

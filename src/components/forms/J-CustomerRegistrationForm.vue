@@ -11,6 +11,7 @@ const form = reactive<RegistrationInput>({
   email: '',
   phone: '',
   address: '',
+  password: '',
 })
 
 const submitting = ref(false)
@@ -22,6 +23,7 @@ const resetForm = () => {
   form.email = ''
   form.phone = ''
   form.address = ''
+  form.password = ''
 }
 
 const handleSubmit = async () => {
@@ -74,6 +76,17 @@ const handleSubmit = async () => {
           v-model="form.address"
           rows="4"
           placeholder="Enter full delivery or billing address"
+          required
+        />
+      </label>
+
+      <label class="form-grid__wide">
+        Password
+        <input
+          v-model="form.password"
+          type="password"
+          placeholder="Create a password"
+          minlength="6"
           required
         />
       </label>

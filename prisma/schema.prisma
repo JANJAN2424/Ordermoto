@@ -27,10 +27,23 @@ model Customer {
   email        String
   phone        String
   address      String
+  passwordHash String  @default("") @map("password_hash")
   registeredAt String  @map("registered_at")
   orders       Order[]
+  sessions     CustomerSession[]
 
   @@map("customers")
+}
+
+model CustomerSession {
+  id               Int      @id @default(autoincrement())
+  sessionTokenHash String   @unique @map("session_token_hash")
+  customerId       Int      @map("customer_id")
+  createdAt        String   @map("created_at")
+  expiresAt        String   @map("expires_at")
+  customer         Customer @relation(fields: [customerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("customer_sessions")
 }
 
 model AdminUser {
@@ -59,6 +72,7 @@ model Order {
   id             Int         @id @default(autoincrement())
   customerId     Int         @map("customer_id")
   deliveryMethod String      @map("delivery_method")
+  status         String      @default("Pending")
   note           String      @default("")
   total          Float
   createdAt      String      @map("created_at")

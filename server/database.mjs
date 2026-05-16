@@ -66,6 +66,14 @@ const seededProducts = [
 ]
 
 const allowedDeliveryMethods = new Set(['Showroom pickup', 'Home delivery'])
+const allowedOrderStatuses = new Set([
+  'Pending',
+  'Preparing',
+  'Ready for pickup',
+  'On delivery',
+  'Delivered',
+  'Cancelled',
+])
 
 const badRequest = (message) => {
   const error = new Error(message)
@@ -80,6 +88,7 @@ const unauthorized = (message) => {
 }
 
 const nowIso = () => new Date().toISOString()
+const normalizeEmail = (value) => value?.trim().toLowerCase() ?? ''
 
 const hashPassword = (password) => {
   const salt = randomBytes(16).toString('hex')
@@ -138,9 +147,21 @@ const serializeAdminSession = (session) => ({
   expiresAt: session.expiresAt,
 })
 
+const serializeCustomerSession = (session) => ({
+  authenticated: true,
+  customer: serializeCustomer(session.customer),
+  expiresAt: session.expiresAt,
+})
+
 const emptyAdminSession = () => ({
   authenticated: false,
   admin: null,
+  expiresAt: null,
+})
+
+const emptyCustomerSession = () => ({
+  authenticated: false,
+  customer: null,
   expiresAt: null,
 })
 
@@ -149,6 +170,7 @@ const serializeOrder = (order) => ({
   customerId: order.customerId,
   customerName: order.customer.fullName,
   deliveryMethod: order.deliveryMethod,
+  status: order.status ?? 'Pending',
   note: order.note,
   total: Number(order.total),
   createdAt: order.createdAt,
@@ -209,6 +231,36 @@ const getAdminSessionRecord = async (sessionToken, client = prisma) => {
   return session
 }
 
+const getCustomerSessionRecord = async (sessionToken, client = prisma) => {
+  if (!sessionToken) {
+    return null
+  }
+
+  const session = await client.customerSession.findUnique({
+    where: {
+      sessionTokenHash: hashSessionToken(sessionToken),
+    },
+    include: {
+      customer: true,
+    },
+  })
+
+  if (!session) {
+    return null
+  }
+
+  if (new Date(session.expiresAt).getTime() <= Date.now()) {
+    await client.customerSession.delete({
+      where: {
+        id: session.id,
+      },
+    })
+    return null
+  }
+
+  return session
+}
+
 export const initializeDatabase = async () => {
   await prisma.$connect()
 
@@ -237,6 +289,14 @@ export const initializeDatabase = async () => {
   })
 
   await prisma.adminSession.deleteMany({
+    where: {
+      expiresAt: {
+        lt: nowIso(),
+      },
+    },
+  })
+
+  await prisma.customerSession.deleteMany({
     where: {
       expiresAt: {
         lt: nowIso(),
@@ -286,6 +346,11 @@ export const getAdminSessionState = async (sessionToken) => {
   return session ? serializeAdminSession(session) : emptyAdminSession()
 }
 
+export const getCustomerSessionState = async (sessionToken) => {
+  const session = await getCustomerSessionRecord(sessionToken)
+  return session ? serializeCustomerSession(session) : emptyCustomerSession()
+}
+
 export const loginAdmin = async (input) => {
   const username = input.username?.trim()
   const password = input.password?.trim()
@@ -326,6 +391,52 @@ export const loginAdmin = async (input) => {
   }
 }
 
+export const loginCustomer = async (input) => {
+  const email = normalizeEmail(input.email)
+  const password = input.password?.trim()
+
+  if (!email || !password) {
+    throw badRequest('Enter the registered email and password.')
+  }
+
+  const customer = await prisma.customer.findFirst({
+    where: {
+      email,
+    },
+  })
+
+  if (customer && !customer.passwordHash) {
+    throw badRequest(
+      'This customer account needs a password. Register again with the same email to set one.',
+    )
+  }
+
+  if (!customer || !verifyPassword(password, customer.passwordHash)) {
+    throw unauthorized('Invalid customer email or password.')
+  }
+
+  const sessionToken = createSessionToken()
+  const createdAt = nowIso()
+  const expiresAt = new Date(Date.now() + sessionDurationMs).toISOString()
+
+  const session = await prisma.customerSession.create({
+    data: {
+      sessionTokenHash: hashSessionToken(sessionToken),
+      customerId: customer.id,
+      createdAt,
+      expiresAt,
+    },
+    include: {
+      customer: true,
+    },
+  })
+
+  return {
+    sessionToken,
+    session: serializeCustomerSession(session),
+  }
+}
+
 export const logoutAdmin = async (sessionToken) => {
   if (!sessionToken) {
     return
@@ -338,25 +449,65 @@ export const logoutAdmin = async (sessionToken) => {
   })
 }
 
+export const logoutCustomer = async (sessionToken) => {
+  if (!sessionToken) {
+    return
+  }
+
+  await prisma.customerSession.deleteMany({
+    where: {
+      sessionTokenHash: hashSessionToken(sessionToken),
+    },
+  })
+}
+
 export const createCustomer = async (input) => {
   const fullName = input.fullName?.trim()
-  const email = input.email?.trim()
+  const email = normalizeEmail(input.email)
   const phone = input.phone?.trim()
   const address = input.address?.trim()
+  const password = input.password?.trim()
 
-  if (!fullName || !email || !phone || !address) {
+  if (!fullName || !email || !phone || !address || !password) {
     throw badRequest('Please complete all registration fields.')
   }
 
-  const customer = await prisma.customer.create({
-    data: {
-      fullName,
+  if (password.length < 6) {
+    throw badRequest('Password must be at least 6 characters long.')
+  }
+
+  const existingCustomer = await prisma.customer.findFirst({
+    where: {
       email,
-      phone,
-      address,
-      registeredAt: new Date().toISOString(),
     },
   })
+
+  if (existingCustomer?.passwordHash) {
+    throw badRequest('A customer account with this email already exists.')
+  }
+
+  const customer = existingCustomer
+    ? await prisma.customer.update({
+        where: {
+          id: existingCustomer.id,
+        },
+        data: {
+          fullName,
+          phone,
+          address,
+          passwordHash: hashPassword(password),
+        },
+      })
+    : await prisma.customer.create({
+        data: {
+          fullName,
+          email,
+          phone,
+          address,
+          passwordHash: hashPassword(password),
+          registeredAt: new Date().toISOString(),
+        },
+      })
 
   return serializeCustomer(customer)
 }
@@ -415,6 +566,122 @@ export const createProduct = async (input) => {
   })
 
   return serializeProduct(product)
+}
+
+export const updateProduct = async (input) => {
+  const productId = Number(input.id)
+  const trimmedSku = input.sku?.trim()
+  const sku = trimmedSku ? trimmedSku.replace(/\s+/g, '-').toUpperCase() : ''
+  const name = input.name?.trim()
+  const category = input.category?.trim()
+  const description = input.description?.trim()
+  const price = Number(input.price)
+  const stock = Number(input.stock)
+  const leadTimeDays = Number(input.leadTimeDays)
+  const featured = input.featured === true
+
+  if (!Number.isInteger(productId) || productId <= 0) {
+    throw badRequest('Choose a valid motorcycle before updating.')
+  }
+
+  if (!sku || !name || !category || !description) {
+    throw badRequest('Please complete all motorcycle fields before saving.')
+  }
+
+  if (!Number.isFinite(price) || price <= 0) {
+    throw badRequest('Enter a valid motorcycle price greater than zero.')
+  }
+
+  if (!Number.isInteger(stock) || stock < 0) {
+    throw badRequest('Stock must be a whole number that is zero or higher.')
+  }
+
+  if (!Number.isInteger(leadTimeDays) || leadTimeDays < 1) {
+    throw badRequest('Lead time must be at least one day.')
+  }
+
+  const existingProduct = await prisma.product.findUnique({
+    where: {
+      id: productId,
+    },
+    select: {
+      id: true,
+    },
+  })
+
+  if (!existingProduct) {
+    throw badRequest('The selected motorcycle could not be found.')
+  }
+
+  const productWithSku = await prisma.product.findUnique({
+    where: {
+      sku,
+    },
+    select: {
+      id: true,
+    },
+  })
+
+  if (productWithSku && productWithSku.id !== productId) {
+    throw badRequest('Another motorcycle already uses this SKU.')
+  }
+
+  const product = await prisma.product.update({
+    where: {
+      id: productId,
+    },
+    data: {
+      sku,
+      name,
+      category,
+      description,
+      price,
+      stock,
+      leadTimeDays,
+      featured: featured ? 1 : 0,
+    },
+  })
+
+  return serializeProduct(product)
+}
+
+export const deleteProduct = async (input) => {
+  const productId = Number(input.productId)
+
+  if (!Number.isInteger(productId) || productId <= 0) {
+    throw badRequest('Choose a valid motorcycle before deleting.')
+  }
+
+  const existingProduct = await prisma.product.findUnique({
+    where: {
+      id: productId,
+    },
+    select: {
+      id: true,
+      name: true,
+      _count: {
+        select: {
+          orderItems: true,
+        },
+      },
+    },
+  })
+
+  if (!existingProduct) {
+    throw badRequest('The selected motorcycle could not be found.')
+  }
+
+  if (existingProduct._count.orderItems > 0) {
+    throw badRequest(
+      `${existingProduct.name} is already used in saved orders, so it cannot be deleted.`,
+    )
+  }
+
+  await prisma.product.delete({
+    where: {
+      id: productId,
+    },
+  })
 }
 
 export const createOrder = async (input) => {
@@ -499,6 +766,7 @@ export const createOrder = async (input) => {
       data: {
         customerId,
         deliveryMethod,
+        status: 'Pending',
         note,
         total,
         createdAt: new Date().toISOString(),
@@ -532,6 +800,44 @@ export const createOrder = async (input) => {
   }
 
   return createdOrder
+}
+
+export const updateOrderStatus = async (input) => {
+  const orderId = Number(input.orderId)
+  const status = input.status?.trim()
+
+  if (!Number.isInteger(orderId) || orderId <= 0) {
+    throw badRequest('Choose a valid order before updating the motorcycle status.')
+  }
+
+  if (!allowedOrderStatuses.has(status)) {
+    throw badRequest('Choose a valid motorcycle status.')
+  }
+
+  const existingOrder = await prisma.order.findUnique({
+    where: {
+      id: orderId,
+    },
+    select: {
+      id: true,
+    },
+  })
+
+  if (!existingOrder) {
+    throw badRequest('The selected order could not be found.')
+  }
+
+  const order = await prisma.order.update({
+    where: {
+      id: orderId,
+    },
+    data: {
+      status,
+    },
+    include: orderInclude,
+  })
+
+  return serializeOrder(order)
 }
 
 export const closeDatabase = async () => {

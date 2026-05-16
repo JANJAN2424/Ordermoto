@@ -1,27 +1,44 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { Customer } from '../../types/system'
+import type { Customer, Order, OrderStatus } from '../../types/system'
 
 const props = withDefaults(
   defineProps<{
     customers: Customer[]
+    orders?: Order[]
     eyebrow?: string
     title?: string
     helper?: string
     emptyMessage?: string
     limit?: number
+    editableStatus?: boolean
   }>(),
   {
     eyebrow: 'Customers',
     title: 'Recently registered customers',
     helper: 'Newly saved customers appear here immediately after registration.',
     emptyMessage: 'No customers registered yet.',
+    orders: () => [],
+    editableStatus: false,
   },
 )
+
+const emit = defineEmits<{
+  updateOrderStatus: [orderId: number, status: OrderStatus]
+}>()
 
 const visibleCustomers = computed(() =>
   typeof props.limit === 'number' ? props.customers.slice(0, props.limit) : props.customers,
 )
+
+const orderStatusOptions: OrderStatus[] = [
+  'Pending',
+  'Preparing',
+  'Ready for pickup',
+  'On delivery',
+  'Delivered',
+  'Cancelled',
+]
 
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
   dateStyle: 'medium',
@@ -29,6 +46,14 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
 })
 
 const formatDate = (value: string) => dateFormatter.format(new Date(value))
+
+const getCustomerOrders = (customerId: number) =>
+  props.orders.filter((order) => order.customerId === customerId)
+
+const handleStatusChange = (orderId: number, event: Event) => {
+  const status = (event.target as HTMLSelectElement).value as OrderStatus
+  emit('updateOrderStatus', orderId, status)
+}
 </script>
 
 <template>
@@ -46,15 +71,50 @@ const formatDate = (value: string) => dateFormatter.format(new Date(value))
     </div>
 
     <article v-for="customer in visibleCustomers" :key="customer.id" class="customer-card">
-      <div>
-        <h3>{{ customer.fullName }}</h3>
-        <p>{{ customer.email }}</p>
-        <p>{{ customer.phone }}</p>
+      <div class="customer-card__top">
+        <div>
+          <h3>{{ customer.fullName }}</h3>
+          <p>{{ customer.email }}</p>
+          <p>{{ customer.phone }}</p>
+        </div>
+
+        <div class="customer-card__meta">
+          <span>{{ customer.address }}</span>
+          <small>{{ formatDate(customer.registeredAt) }}</small>
+        </div>
       </div>
 
-      <div class="customer-card__meta">
-        <span>{{ customer.address }}</span>
-        <small>{{ formatDate(customer.registeredAt) }}</small>
+      <div v-if="orders.length > 0" class="customer-orders">
+        <div v-if="getCustomerOrders(customer.id).length === 0" class="customer-orders__empty">
+          No motorcycle orders yet.
+        </div>
+
+        <article
+          v-for="order in getCustomerOrders(customer.id)"
+          :key="order.id"
+          class="customer-order"
+        >
+          <div>
+            <strong>Order #{{ order.id }}</strong>
+            <span>{{ order.deliveryMethod }} · {{ formatDate(order.createdAt) }}</span>
+            <small>
+              {{ order.items.map((item) => `${item.productName} x ${item.quantity}`).join(', ') }}
+            </small>
+          </div>
+
+          <label class="status-control">
+            <span>Motorcycle status</span>
+            <select
+              :value="order.status"
+              :disabled="!editableStatus"
+              @change="handleStatusChange(order.id, $event)"
+            >
+              <option v-for="status in orderStatusOptions" :key="status" :value="status">
+                {{ status }}
+              </option>
+            </select>
+          </label>
+        </article>
       </div>
     </article>
   </section>
@@ -107,8 +167,7 @@ const formatDate = (value: string) => dateFormatter.format(new Date(value))
 }
 
 .customer-card {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
   gap: 1rem;
   border: 1px solid rgba(94, 70, 47, 0.12);
   border-radius: 1.2rem;
@@ -118,6 +177,12 @@ const formatDate = (value: string) => dateFormatter.format(new Date(value))
 
 .customer-card + .customer-card {
   margin-top: 0.85rem;
+}
+
+.customer-card__top {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
 }
 
 .customer-card h3 {
@@ -139,9 +204,64 @@ const formatDate = (value: string) => dateFormatter.format(new Date(value))
   text-align: right;
 }
 
+.customer-orders {
+  display: grid;
+  gap: 0.7rem;
+  border-top: 1px solid rgba(94, 70, 47, 0.1);
+  padding-top: 0.85rem;
+}
+
+.customer-orders__empty {
+  color: #8d7f6f;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.customer-order {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid rgba(94, 70, 47, 0.1);
+  border-radius: 0.95rem;
+  background: rgba(255, 252, 247, 0.78);
+  padding: 0.85rem;
+}
+
+.customer-order div,
+.status-control {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.customer-order strong {
+  color: #231b14;
+}
+
+.customer-order span,
+.customer-order small,
+.status-control span {
+  color: #6b5c4c;
+}
+
+.status-control {
+  min-width: min(15rem, 100%);
+  font-weight: 700;
+}
+
+.status-control select {
+  border: 1px solid rgba(94, 70, 47, 0.16);
+  border-radius: 0.85rem;
+  background: #ffffff;
+  color: #231b14;
+  padding: 0.7rem 0.8rem;
+  font: inherit;
+}
+
 @media (max-width: 760px) {
   .customer-list__header,
-  .customer-card {
+  .customer-card__top,
+  .customer-order {
     display: grid;
   }
 

@@ -86,7 +86,7 @@ const handleSubmit = async () => {
       </label>
 
       <label>
-        Price (USD)
+        Price (PHP)
         <input
           v-model="form.price"
           type="number"

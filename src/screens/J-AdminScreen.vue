@@ -4,14 +4,27 @@ import CustomerListPanel from '../components/customers/J-CustomerListPanel.vue'
 import ProductCreationForm from '../components/forms/J-ProductCreationForm.vue'
 import ProductShowcase from '../components/products/J-ProductShowcase.vue'
 import StatCard from '../components/ui/J-StatCard.vue'
-import type { CreateProductInput, Customer, Order, Product } from '../types/system'
+import type {
+  CreateProductInput,
+  Customer,
+  Order,
+  OrderStatus,
+  Product,
+  RouteKey,
+  UpdateOrderStatusInput,
+  UpdateProductInput,
+} from '../types/system'
 
 const props = defineProps<{
+  section: RouteKey
   customers: Customer[]
   orders: Order[]
   products: Product[]
   adminDisplayName?: string
   createProduct: (payload: CreateProductInput) => Promise<Product>
+  updateProduct: (payload: UpdateProductInput) => Promise<Product>
+  deleteProduct: (productId: number) => Promise<void>
+  updateOrderStatus: (payload: UpdateOrderStatusInput) => Promise<Order>
 }>()
 
 const latestCustomer = computed(() => props.customers[0]?.fullName ?? 'No customers yet')
@@ -19,6 +32,35 @@ const featuredProducts = computed(() => props.products.filter((product) => produ
 const totalStockUnits = computed(() =>
   props.products.reduce((total, product) => total + product.stock, 0),
 )
+const pendingOrders = computed(() =>
+  props.orders.filter((order) => order.status === 'Pending' || order.status === 'Preparing').length,
+)
+const activeDeliveryOrders = computed(() =>
+  props.orders.filter((order) => order.status === 'Ready for pickup' || order.status === 'On delivery')
+    .length,
+)
+
+const pageTitle = computed(() => {
+  if (props.section === 'admin-products') return 'Motorcycle list preview'
+  if (props.section === 'admin-customers') return 'Recently registered customers'
+  return 'Add a motorcycle to the catalog'
+})
+
+const pageHelper = computed(() => {
+  if (props.section === 'admin-products') {
+    return 'Review the live motorcycle catalog customers can browse.'
+  }
+
+  if (props.section === 'admin-customers') {
+    return 'Review customer accounts created from the registration page.'
+  }
+
+  return 'Create a new motorcycle record and add it to the customer catalog.'
+})
+
+const updateStatus = async (orderId: number, status: OrderStatus) => {
+  await props.updateOrderStatus({ orderId, status })
+}
 </script>
 
 <template>
@@ -26,71 +68,37 @@ const totalStockUnits = computed(() =>
     <section class="hero-card">
       <div>
         <p class="eyebrow">Admin</p>
-        <h2>Admin page for system monitoring and customer oversight.</h2>
+        <h2>{{ pageTitle }}</h2>
         <p v-if="adminDisplayName" class="admin-signature">
           Signed in as {{ adminDisplayName }}.
         </p>
       </div>
-      <p class="hero-card__summary">
-        Review recent registrations, monitor how many orders are saved, and keep an eye on
-        active inventory from one admin view.
-      </p>
+      <p class="hero-card__summary">{{ pageHelper }}</p>
     </section>
 
-    <section class="stats-grid">
-      <StatCard
-        label="Registered customers"
-        :value="String(customers.length)"
-        helper="Total customers currently stored in the system database."
-      />
-      <StatCard
-        label="Saved orders"
-        :value="String(orders.length)"
-        helper="Orders submitted by customers and retained in SQLite through Prisma."
-      />
+    <section v-if="section === 'admin-inventory'" class="stats-grid">
       <StatCard
         label="Catalog products"
         :value="String(products.length)"
         helper="Available motorcycles shown to customers in the product catalog."
       />
       <StatCard
-        label="Latest customer"
-        :value="latestCustomer"
-        helper="Most recently registered customer shown at the top of the admin list."
+        label="Total stock units"
+        :value="String(totalStockUnits)"
+        helper="Combined stock count across every motorcycle in the catalog."
+      />
+      <StatCard
+        label="Featured motorcycles"
+        :value="String(featuredProducts)"
+        helper="Motorcycles marked as featured appear first in customer views."
       />
     </section>
 
-    <section class="management-grid">
+    <section v-if="section === 'admin-inventory'" class="management-grid">
       <ProductCreationForm :submit-product="createProduct" />
-
-      <article class="inventory-summary-card">
-        <div>
-          <p class="eyebrow">Overview</p>
-          <h3>Catalog management at a glance</h3>
-        </div>
-        <p>
-          Add a motorcycle, then confirm how it appears below. Customers will see the same live
-          product list on the About and Orders pages.
-        </p>
-
-        <div class="inventory-summary-card__metrics">
-          <div class="metric-row">
-            <span>Total stock units</span>
-            <strong>{{ totalStockUnits }}</strong>
-          </div>
-          <div class="metric-row">
-            <span>Featured motorcycles</span>
-            <strong>{{ featuredProducts }}</strong>
-          </div>
-          <div class="metric-row">
-            <span>Catalog sorting</span>
-            <strong>Featured first</strong>
-          </div>
-        </div>
-      </article>
     </section>
 
-    <section class="inventory-preview">
+    <section v-else-if="section === 'admin-products'" class="inventory-preview">
       <div class="inventory-preview__header">
         <div>
           <p class="eyebrow">Catalog</p>
@@ -99,17 +107,50 @@ const totalStockUnits = computed(() =>
         <p>Everything saved here is available immediately to customers browsing the catalog.</p>
       </div>
 
-      <ProductShowcase :products="products" />
+      <ProductShowcase
+        :products="products"
+        editable
+        :update-product="updateProduct"
+        :delete-product="deleteProduct"
+      />
     </section>
 
-    <CustomerListPanel
-      :customers="customers"
-      eyebrow="Customers"
-      title="Recently registered customers"
-      helper="Newly saved customers appear here immediately after registration."
-      empty-message="No customers registered yet. Use the registration page to add the first one."
-      :limit="6"
-    />
+    <template v-else-if="section === 'admin-customers'">
+      <section class="stats-grid">
+        <StatCard
+          label="Registered customers"
+          :value="String(customers.length)"
+          helper="Total customers currently stored in the system database."
+        />
+        <StatCard
+          label="Saved orders"
+          :value="String(orders.length)"
+          helper="Orders submitted by customers and retained in SQLite through Prisma."
+        />
+        <StatCard
+          label="Pending motorcycles"
+          :value="String(pendingOrders)"
+          helper="Orders still pending or being prepared."
+        />
+        <StatCard
+          label="Active delivery"
+          :value="String(activeDeliveryOrders)"
+          helper="Orders ready for pickup or currently on delivery."
+        />
+      </section>
+
+      <CustomerListPanel
+        :customers="customers"
+        :orders="orders"
+        eyebrow="Customers"
+        title="Recently registered customers"
+        helper="Update motorcycle order status for each registered customer."
+        empty-message="No customers registered yet. Use the registration page to add the first one."
+        :limit="12"
+        editable-status
+        @update-order-status="updateStatus"
+      />
+    </template>
   </section>
 </template>
 
@@ -165,11 +206,10 @@ const totalStockUnits = computed(() =>
 
 .management-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
 }
 
-.inventory-summary-card,
 .inventory-preview {
   border: 1px solid rgba(94, 70, 47, 0.12);
   border-radius: 1.5rem;
@@ -178,46 +218,14 @@ const totalStockUnits = computed(() =>
   box-shadow: 0 18px 40px rgba(73, 51, 27, 0.08);
 }
 
-.inventory-summary-card {
-  display: grid;
-  align-content: start;
-  gap: 1rem;
-}
-
-.inventory-summary-card h3,
 .inventory-preview__header h2 {
   margin-top: 0.25rem;
   color: #231b14;
   font-family: Georgia, 'Times New Roman', serif;
 }
 
-.inventory-summary-card p,
 .inventory-preview__header p {
   color: #6b5c4c;
-}
-
-.inventory-summary-card__metrics {
-  display: grid;
-  gap: 0.75rem;
-}
-
-.metric-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  border: 1px solid rgba(94, 70, 47, 0.12);
-  border-radius: 1rem;
-  background: #fff;
-  padding: 0.9rem 1rem;
-}
-
-.metric-row span {
-  color: #6b5c4c;
-}
-
-.metric-row strong {
-  color: #231b14;
 }
 
 .inventory-preview {

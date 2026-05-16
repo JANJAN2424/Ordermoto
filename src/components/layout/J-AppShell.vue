@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import type { AdminSessionState, RouteKey } from '../../types/system'
+import type { AdminSessionState, CustomerSessionState, RouteKey } from '../../types/system'
 
 const props = defineProps<{
   currentRoute: RouteKey
@@ -12,6 +12,7 @@ const props = defineProps<{
   loading: boolean
   errorMessage: string
   adminSession: AdminSessionState
+  customerSession: CustomerSessionState
 }>()
 
 const emit = defineEmits<{
@@ -20,12 +21,16 @@ const emit = defineEmits<{
 }>()
 
 const navIcons: Record<RouteKey, string> = {
-  home: 'M4 12 12 4l8 8-2 2-2-2v7H8v-7l-2 2-2-2 8-8Z',
   dashboard: 'M4 5h7v6H4V5Zm9 0h7v10h-7V5ZM4 13h7v6H4v-6Zm9 4h7v2h-7v-2Z',
   about: 'M4 14.5c2.2-4.2 5.1-6.5 8.5-6.5 3.6 0 5.5 1.8 7.5 5m-12 0 1.7 3h5.8l2.5-5H21M7 16a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0Zm15 0a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0Z',
   registration: 'M16 20v-1.4c0-2.4-1.9-4.3-4.3-4.3H7.3C4.9 14.3 3 16.2 3 18.6V20m13-12a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0Zm2 4h5m-2.5-2.5v5',
   orders: 'M8 4h8m-7 3h6m-8 1h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Zm0 0V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2',
+  'order-history': 'M7 4h10a2 2 0 0 1 2 2v14l-3-2-3 2-3-2-3 2V6a2 2 0 0 1 2-2Zm3 5h6m-6 4h6',
   admin: 'M12 3 5 6v5c0 4.6 2.6 7.7 7 10 4.4-2.3 7-5.4 7-10V6l-7-3Zm0 6.2a2.3 2.3 0 1 1 0 4.6 2.3 2.3 0 0 1 0-4.6Zm-3.4 8c.8-1.8 2.3-2.7 3.4-2.7 1.1 0 2.6.9 3.4 2.7',
+  'admin-inventory': 'M4 7h16m-2 0v13H6V7m3 0V4h6v3m-3 4v5m-2.5-2.5h5',
+  'admin-products': 'M4 14.5c2.2-4.2 5.1-6.5 8.5-6.5 3.6 0 5.5 1.8 7.5 5m-12 0 1.7 3h5.8l2.5-5H21M7 16a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0Zm15 0a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0Z',
+  'admin-customers': 'M16 20v-1.4c0-2.4-1.9-4.3-4.3-4.3H7.3C4.9 14.3 3 16.2 3 18.6V20m13-12a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0Zm2 4h5m-2.5-2.5v5',
+  login: 'M10 7V5.5A2.5 2.5 0 0 1 12.5 3h4A2.5 2.5 0 0 1 19 5.5v13a2.5 2.5 0 0 1-2.5 2.5h-4A2.5 2.5 0 0 1 10 18.5V17m-7-5h11m-3.5-3.5L14 12l-3.5 3.5',
 }
 
 const topbarClock = ref(new Date())
@@ -43,22 +48,35 @@ const currentSection = computed(
   () => props.navigationItems.find((item) => item.key === props.currentRoute) ?? props.navigationItems[0],
 )
 
+const hasAuthenticatedSession = computed(
+  () => props.adminSession.authenticated || props.customerSession.authenticated,
+)
+
 const welcomeMessage = computed(() => {
   if (props.adminSession.authenticated) {
     return `Welcome back, ${props.adminSession.admin?.displayName ?? 'Admin'}!`
+  }
+
+  if (props.customerSession.authenticated) {
+    return `Welcome back, ${props.customerSession.customer?.fullName ?? 'Customer'}!`
   }
 
   return 'Welcome to Ordermoto.'
 })
 
 const userPrimaryLabel = computed(
-  () => props.adminSession.admin?.displayName ?? 'Guest session',
+  () =>
+    props.adminSession.admin?.displayName ??
+    props.customerSession.customer?.fullName ??
+    'Guest session',
 )
 
 const userSecondaryLabel = computed(() =>
   props.adminSession.authenticated
     ? props.adminSession.admin?.username ?? 'Administrator'
-    : 'Public workspace',
+    : props.customerSession.authenticated
+      ? props.customerSession.customer?.email ?? 'Customer account'
+      : 'Public workspace',
 )
 
 const timestamp = computed(() => timestampFormatter.format(topbarClock.value))
@@ -72,17 +90,14 @@ const syncLayout = () => {
     return
   }
 
-  if (!nextCompactLayout) {
-    navOpen.value = true
-  }
 }
 
 const toggleNav = () => {
-  if (!isCompactLayout.value) {
-    return
-  }
-
   navOpen.value = !navOpen.value
+}
+
+const closeNav = () => {
+  navOpen.value = false
 }
 
 const handleNavigate = (route: RouteKey) => {
@@ -119,13 +134,28 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="shell">
+  <div
+    class="shell"
+    :class="{
+      'shell--drawer-open': navOpen,
+      'shell--compact': isCompactLayout,
+    }"
+  >
+    <button
+      v-if="navOpen && isCompactLayout"
+      type="button"
+      class="drawer-scrim"
+      aria-label="Close navigation drawer"
+      @click="closeNav"
+    ></button>
+
     <aside
       class="sidebar"
       :class="{
         'sidebar--compact': isCompactLayout,
-        'sidebar--collapsed': isCompactLayout && !navOpen,
+        'sidebar--collapsed': !navOpen,
       }"
+      aria-label="Navigation drawer"
     >
       <div class="sidebar__header">
         <button type="button" class="brand" @click="handleNavigate('dashboard')">
@@ -145,16 +175,14 @@ onBeforeUnmount(() => {
         </button>
 
         <button
-          v-if="isCompactLayout"
           type="button"
           class="nav-toggle"
           :aria-expanded="navOpen"
-          aria-label="Toggle navigation"
+          aria-label="Close navigation drawer"
           @click="toggleNav"
         >
-          <span></span>
-          <span></span>
-          <span></span>
+          <span class="nav-toggle__close-line"></span>
+          <span class="nav-toggle__close-line"></span>
         </button>
       </div>
 
@@ -186,20 +214,28 @@ onBeforeUnmount(() => {
         </button>
       </nav>
 
-      <div class="admin-status" :class="{ 'admin-status--active': adminSession.authenticated }">
+      <div class="admin-status" :class="{ 'admin-status--active': hasAuthenticatedSession }">
         <p class="admin-status__label">System Status</p>
         <strong>
-          {{ adminSession.authenticated ? 'Admin tools unlocked' : 'All systems operational' }}
+          {{
+            adminSession.authenticated
+              ? 'Admin tools unlocked'
+              : customerSession.authenticated
+                ? 'Customer account signed in'
+                : 'All systems operational'
+          }}
         </strong>
         <span>
           {{
             adminSession.authenticated
               ? 'Inventory controls are ready for protected changes.'
-              : 'Browse products, register customers, and sign in for admin actions.'
+              : customerSession.authenticated
+                ? 'Orders can now be attached directly to the signed-in customer profile.'
+                : 'Browse products, register customers, and sign in for account access.'
           }}
         </span>
         <button
-          v-if="adminSession.authenticated"
+          v-if="hasAuthenticatedSession"
           type="button"
           class="admin-status__button"
           @click="handleLogout"
@@ -211,10 +247,24 @@ onBeforeUnmount(() => {
 
     <section class="workspace">
       <header class="topbar">
-        <div>
-          <p class="topbar__eyebrow">{{ currentSection?.label }}</p>
-          <h1>{{ welcomeMessage }}</h1>
-          <p>{{ currentSection?.helper }}</p>
+        <div class="topbar__title-row">
+          <button
+            type="button"
+            class="drawer-button"
+            :aria-expanded="navOpen"
+            aria-label="Toggle navigation drawer"
+            @click="toggleNav"
+          >
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
+
+          <div>
+            <p class="topbar__eyebrow">{{ currentSection?.label }}</p>
+            <h1>{{ welcomeMessage }}</h1>
+            <p>{{ currentSection?.helper }}</p>
+          </div>
         </div>
 
         <div class="topbar__meta">
@@ -247,19 +297,33 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .shell {
-  display: grid;
-  grid-template-columns: clamp(230px, 18vw, 280px) minmax(0, 1fr);
-  gap: clamp(0.85rem, 1vw, 1.15rem);
+  --drawer-width: clamp(230px, 18vw, 280px);
+  --shell-gap: clamp(0.85rem, 1vw, 1.15rem);
+  display: block;
   width: 100%;
   min-height: 100vh;
   margin: 0 auto;
   padding: clamp(0.75rem, 1vw, 1rem);
 }
 
+.drawer-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  border: 0;
+  background: rgba(8, 10, 15, 0.5);
+  cursor: pointer;
+}
+
 .sidebar {
+  position: fixed;
+  inset: clamp(0.75rem, 1vw, 1rem) auto clamp(0.75rem, 1vw, 1rem) clamp(0.75rem, 1vw, 1rem);
+  z-index: 40;
   display: grid;
   grid-template-rows: auto 1fr auto;
   gap: 1.2rem;
+  width: var(--drawer-width);
+  max-width: calc(100vw - 2rem);
   padding: 1.1rem;
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 1.8rem;
@@ -268,6 +332,15 @@ onBeforeUnmount(() => {
     linear-gradient(180deg, rgba(19, 22, 30, 0.98), rgba(10, 12, 17, 0.99));
   color: #f4f7fb;
   box-shadow: 0 30px 70px rgba(8, 10, 15, 0.35);
+  transform: translateX(0);
+  transition:
+    transform 0.24s ease,
+    box-shadow 0.24s ease;
+}
+
+.sidebar--collapsed {
+  box-shadow: none;
+  transform: translateX(calc(-100% - 1.5rem));
 }
 
 .sidebar__header {
@@ -291,9 +364,9 @@ onBeforeUnmount(() => {
 
 .nav-toggle {
   display: inline-flex;
-  flex-direction: column;
+  position: relative;
   justify-content: center;
-  gap: 0.28rem;
+  align-items: center;
   width: 2.9rem;
   height: 2.9rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -304,11 +377,20 @@ onBeforeUnmount(() => {
   padding: 0.7rem;
 }
 
-.nav-toggle span {
-  width: 100%;
+.nav-toggle__close-line {
+  position: absolute;
+  width: 1.15rem;
   height: 2px;
   border-radius: 999px;
   background: #ffffff;
+}
+
+.nav-toggle__close-line:first-child {
+  transform: rotate(45deg);
+}
+
+.nav-toggle__close-line:last-child {
+  transform: rotate(-45deg);
 }
 
 .brand__mark {
@@ -477,6 +559,12 @@ onBeforeUnmount(() => {
   align-content: start;
   gap: 1rem;
   min-width: 0;
+  margin-left: 0;
+  transition: margin-left 0.24s ease;
+}
+
+.shell--drawer-open:not(.shell--compact) .workspace {
+  margin-left: calc(var(--drawer-width) + var(--shell-gap));
 }
 
 .topbar {
@@ -489,6 +577,36 @@ onBeforeUnmount(() => {
   border-radius: 1.6rem;
   background: rgba(255, 255, 255, 0.92);
   box-shadow: 0 18px 40px rgba(15, 17, 22, 0.05);
+}
+
+.topbar__title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.95rem;
+  min-width: 0;
+}
+
+.drawer-button {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.24rem;
+  width: 2.9rem;
+  height: 2.9rem;
+  border: 1px solid rgba(16, 24, 40, 0.08);
+  border-radius: 1rem;
+  background: #ffffff;
+  color: #161b23;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0.72rem;
+}
+
+.drawer-button span {
+  width: 100%;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
 }
 
 .topbar__eyebrow {
@@ -597,7 +715,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1500px) {
   .shell {
-    grid-template-columns: clamp(220px, 20vw, 250px) minmax(0, 1fr);
+    --drawer-width: clamp(220px, 20vw, 250px);
   }
 
   .topbar {
@@ -606,23 +724,12 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1280px) {
-  .shell {
+  .sidebar__nav {
     grid-template-columns: 1fr;
   }
 
-  .sidebar {
-    position: sticky;
-    top: 0.8rem;
-    z-index: 20;
-    grid-template-rows: auto auto auto;
-  }
-
-  .sidebar__nav {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .nav-link__copy small {
-    display: none;
+    display: block;
   }
 
   .topbar {
@@ -649,6 +756,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 760px) {
   .shell {
+    --drawer-width: min(20rem, calc(100vw - 1.6rem));
     padding: 0.8rem;
   }
 
@@ -673,17 +781,6 @@ onBeforeUnmount(() => {
   .meta-pill,
   .profile-card {
     width: 100%;
-  }
-}
-
-@media (max-width: 1280px) {
-  .sidebar--collapsed {
-    gap: 0;
-  }
-
-  .sidebar--collapsed .sidebar__nav,
-  .sidebar--collapsed .admin-status {
-    display: none;
   }
 }
 
