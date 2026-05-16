@@ -2,6 +2,8 @@ import type {
   AdminLoginInput,
   AdminSessionState,
   BootstrapData,
+  CreateProductInput,
+  CreateProductResponse,
   CreateOrderInput,
   Customer,
   OrderSubmissionResponse,
@@ -51,6 +53,12 @@ export const createCustomer = (payload: RegistrationInput) =>
 
 export const createOrder = (payload: CreateOrderInput) =>
   request<OrderSubmissionResponse>('/api/orders', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+
+export const createProduct = (payload: CreateProductInput) =>
+  request<CreateProductResponse>('/api/admin/products', {
     method: 'POST',
     body: JSON.stringify(payload),
   })

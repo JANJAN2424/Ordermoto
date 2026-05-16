@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import ProductShowcase from '../components/products/ProductShowcase.vue'
+import ProductShowcase from '../components/products/J-ProductShowcase.vue'
 import type { Product } from '../types/system'
 
 defineProps<{

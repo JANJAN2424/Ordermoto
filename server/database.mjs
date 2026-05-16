@@ -361,6 +361,62 @@ export const createCustomer = async (input) => {
   return serializeCustomer(customer)
 }
 
+export const createProduct = async (input) => {
+  const trimmedSku = input.sku?.trim()
+  const sku = trimmedSku ? trimmedSku.replace(/\s+/g, '-').toUpperCase() : ''
+  const name = input.name?.trim()
+  const category = input.category?.trim()
+  const description = input.description?.trim()
+  const price = Number(input.price)
+  const stock = Number(input.stock)
+  const leadTimeDays = Number(input.leadTimeDays)
+  const featured = input.featured === true
+
+  if (!sku || !name || !category || !description) {
+    throw badRequest('Please complete all motorcycle fields before saving.')
+  }
+
+  if (!Number.isFinite(price) || price <= 0) {
+    throw badRequest('Enter a valid motorcycle price greater than zero.')
+  }
+
+  if (!Number.isInteger(stock) || stock < 0) {
+    throw badRequest('Stock must be a whole number that is zero or higher.')
+  }
+
+  if (!Number.isInteger(leadTimeDays) || leadTimeDays < 1) {
+    throw badRequest('Lead time must be at least one day.')
+  }
+
+  const existingProduct = await prisma.product.findUnique({
+    where: {
+      sku,
+    },
+    select: {
+      id: true,
+    },
+  })
+
+  if (existingProduct) {
+    throw badRequest('A motorcycle with this SKU already exists in the catalog.')
+  }
+
+  const product = await prisma.product.create({
+    data: {
+      sku,
+      name,
+      category,
+      description,
+      price,
+      stock,
+      leadTimeDays,
+      featured: featured ? 1 : 0,
+    },
+  })
+
+  return serializeProduct(product)
+}
+
 export const createOrder = async (input) => {
   const customerId = Number(input.customerId)
   const deliveryMethod = input.deliveryMethod?.trim()

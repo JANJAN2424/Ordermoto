@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import AppShell from './components/layout/AppShell.vue'
-import AdminLoginScreen from './screens/AdminLoginScreen.vue'
-import AdminScreen from './screens/AdminScreen.vue'
-import AboutScreen from './screens/AboutScreen.vue'
-import HomeScreen from './screens/HomeScreen.vue'
-import OrdersScreen from './screens/OrdersScreen.vue'
-import RegistrationScreen from './screens/RegistrationScreen.vue'
+import AppShell from './components/layout/J-AppShell.vue'
+import AdminLoginScreen from './screens/J-AdminLoginScreen.vue'
+import AdminScreen from './screens/J-AdminScreen.vue'
+import AboutScreen from './screens/J-AboutScreen.vue'
+import DashboardScreen from './screens/J-DashboardScreen.vue'
+import HomeScreen from './screens/J-HomeScreen.vue'
+import OrdersScreen from './screens/J-OrdersScreen.vue'
+import RegistrationScreen from './screens/J-RegistrationScreen.vue'
 import {
   createCustomer,
+  createProduct as requestCreateProduct,
   createOrder,
   getAdminSession,
   getBootstrapData,
@@ -18,6 +20,7 @@ import {
 import type {
   AdminLoginInput,
   AdminSessionState,
+  CreateProductInput,
   CreateOrderInput,
   Customer,
   Order,
@@ -29,11 +32,18 @@ import type {
 const normalizeRoute = (hash: string): RouteKey => {
   const route = hash.replace('#', '').trim().toLowerCase()
 
-  if (route === 'about' || route === 'registration' || route === 'orders' || route === 'admin') {
+  if (
+    route === 'home' ||
+    route === 'dashboard' ||
+    route === 'about' ||
+    route === 'registration' ||
+    route === 'orders' ||
+    route === 'admin'
+  ) {
     return route
   }
 
-  return 'home'
+  return 'admin'
 }
 
 const currentRoute = ref<RouteKey>(normalizeRoute(window.location.hash))
@@ -49,14 +59,14 @@ const adminSession = ref<AdminSessionState>({
 })
 
 const navigationItems = computed<Array<{ key: RouteKey; label: string; helper: string }>>(() => [
-  { key: 'home', label: 'Homepage', helper: 'Welcome and overview' },
-  { key: 'about', label: 'About', helper: 'Available products' },
+  { key: 'dashboard', label: 'Dashboard', helper: 'Overview and quick actions' },
+  { key: 'about', label: 'Motorcycles', helper: 'Available product catalog' },
   { key: 'registration', label: 'Registration', helper: 'Customer form' },
-  { key: 'orders', label: 'Orders', helper: 'Products added by customers' },
+  { key: 'orders', label: 'Orders', helper: 'Build and save customer orders' },
   {
     key: 'admin',
-    label: adminSession.value.authenticated ? 'Admin dashboard' : 'Admin login',
-    helper: adminSession.value.authenticated ? 'Protected admin tools' : 'Administrator access',
+    label: adminSession.value.authenticated ? 'Admin' : 'Admin login',
+    helper: adminSession.value.authenticated ? 'Protected inventory tools' : 'Administrator access',
   },
 ])
 
@@ -101,6 +111,13 @@ const saveOrder = async (payload: CreateOrderInput) => {
   return response.order
 }
 
+const saveProduct = async (payload: CreateProductInput) => {
+  const response = await requestCreateProduct(payload)
+  products.value = response.products
+  errorMessage.value = ''
+  return response.product
+}
+
 const signInAdmin = async (payload: AdminLoginInput) => {
   const session = await requestAdminLogin(payload)
   adminSession.value = session
@@ -117,7 +134,7 @@ const signOutAdmin = async () => {
   }
 
   if (currentRoute.value === 'admin') {
-    navigate('home')
+    navigate('admin')
   }
 }
 
@@ -125,7 +142,7 @@ onMounted(() => {
   window.addEventListener('hashchange', syncRoute)
 
   if (!window.location.hash) {
-    navigate('home')
+    navigate('admin')
   } else {
     syncRoute()
   }
@@ -139,7 +156,29 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <HomeScreen
+    v-if="currentRoute === 'home'"
+    :products="products"
+    :customers="customers"
+    :orders="orders"
+    @navigate="navigate"
+  />
+
+  <RegistrationScreen
+    v-else-if="currentRoute === 'registration'"
+    :customers="customers"
+    :register-customer="registerCustomer"
+    @navigate="navigate"
+  />
+
+  <AdminLoginScreen
+    v-else-if="currentRoute === 'admin' && !adminSession.authenticated"
+    :login-admin="signInAdmin"
+    @navigate="navigate"
+  />
+
   <AppShell
+    v-else
     :current-route="currentRoute"
     :navigation-items="navigationItems"
     :loading="loading"
@@ -148,20 +187,15 @@ onBeforeUnmount(() => {
     @navigate="navigate"
     @logout="signOutAdmin"
   >
-    <HomeScreen
-      v-if="currentRoute === 'home'"
+    <DashboardScreen
+      v-if="currentRoute === 'dashboard'"
       :products="products"
       :customers="customers"
       :orders="orders"
+      @navigate="navigate"
     />
 
     <AboutScreen v-else-if="currentRoute === 'about'" :products="products" />
-
-    <RegistrationScreen
-      v-else-if="currentRoute === 'registration'"
-      :customers="customers"
-      :register-customer="registerCustomer"
-    />
 
     <OrdersScreen
       v-else-if="currentRoute === 'orders'"
@@ -177,8 +211,7 @@ onBeforeUnmount(() => {
       :orders="orders"
       :products="products"
       :admin-display-name="adminSession.admin?.displayName"
+      :create-product="saveProduct"
     />
-
-    <AdminLoginScreen v-else :login-admin="signInAdmin" />
   </AppShell>
 </template>

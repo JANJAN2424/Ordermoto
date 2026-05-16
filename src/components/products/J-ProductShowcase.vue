@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Product } from '../../types/system'
-import StatusBadge from '../ui/StatusBadge.vue'
+import StatusBadge from '../ui/J-StatusBadge.vue'
 
 defineProps<{
   products: Product[]

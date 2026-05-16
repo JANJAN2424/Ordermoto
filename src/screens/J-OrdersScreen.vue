@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import CurrentOrderPanel from '../components/orders/CurrentOrderPanel.vue'
-import OrderBuilder from '../components/orders/OrderBuilder.vue'
-import OrdersHistory from '../components/orders/OrdersHistory.vue'
+import CurrentOrderPanel from '../components/orders/J-CurrentOrderPanel.vue'
+import OrderBuilder from '../components/orders/J-OrderBuilder.vue'
+import OrdersHistory from '../components/orders/J-OrdersHistory.vue'
 import type {
   CreateOrderInput,
   Customer,

@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url'
 import {
   closeDatabase,
   createCustomer,
+  createProduct,
   createOrder,
   getAdminSessionState,
   getBootstrapData,
@@ -126,6 +127,23 @@ const clearAdminSessionCookie = (response) => {
 const getAdminSessionToken = (request) =>
   parseCookies(request.headers.cookie ?? '')[adminSessionCookieName] ?? ''
 
+const requireAdminSession = async (request, response) => {
+  const sessionToken = getAdminSessionToken(request)
+  const session = await getAdminSessionState(sessionToken)
+
+  if (session.authenticated) {
+    return session
+  }
+
+  if (sessionToken) {
+    clearAdminSessionCookie(response)
+  }
+
+  const error = new Error('Admin sign-in is required to add motorcycles.')
+  error.statusCode = 401
+  throw error
+}
+
 const readJsonBody = async (request) => {
   const chunks = []
 
@@ -234,6 +252,17 @@ const createAppServer = () =>
         await logoutAdmin(getAdminSessionToken(request))
         clearAdminSessionCookie(response)
         sendJson(response, 200, { success: true })
+        return
+      }
+
+      if (request.method === 'POST' && requestUrl.pathname === '/api/admin/products') {
+        await requireAdminSession(request, response)
+        const payload = await readJsonBody(request)
+        const product = await createProduct(payload)
+        sendJson(response, 201, {
+          product,
+          products: await listProducts(),
+        })
         return
       }
 

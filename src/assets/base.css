@@ -1,12 +1,15 @@
 :root {
-  --color-background: #f6ede1;
-  --color-surface: rgba(255, 250, 244, 0.92);
-  --color-surface-strong: #fffdf8;
-  --color-text: #231b14;
-  --color-muted: #6b5c4c;
-  --color-accent: #c86b2f;
-  --color-accent-strong: #8f3d14;
-  --color-border: rgba(94, 70, 47, 0.12);
+  --color-background: #f5f6f8;
+  --color-surface: rgba(255, 255, 255, 0.94);
+  --color-surface-strong: #ffffff;
+  --color-panel: #0f1116;
+  --color-panel-soft: #171a22;
+  --color-text: #12151c;
+  --color-muted: #697181;
+  --color-accent: #ff6a00;
+  --color-accent-strong: #ff7d1f;
+  --color-border: rgba(16, 24, 40, 0.08);
+  --color-shadow: 0 26px 60px rgba(15, 17, 22, 0.1);
 }
 
 *,
@@ -21,11 +24,11 @@ body {
   min-height: 100vh;
   color: var(--color-text);
   background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.8), transparent 28%),
-    radial-gradient(circle at right center, rgba(208, 100, 42, 0.14), transparent 24%),
-    linear-gradient(180deg, #fcf7f0 0%, #f3e6d6 100%);
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.92), transparent 24%),
+    radial-gradient(circle at right top, rgba(255, 106, 0, 0.12), transparent 22%),
+    linear-gradient(180deg, #fbfcfe 0%, #eef1f7 100%);
   line-height: 1.6;
-  font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', sans-serif;
+  font-family: 'Segoe UI', 'Trebuchet MS', sans-serif;
   font-size: 15px;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -37,4 +40,9 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+img,
+svg {
+  max-width: 100%;
 }

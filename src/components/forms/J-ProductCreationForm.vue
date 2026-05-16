@@ -1,16 +1,20 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
-import type { Customer, RegistrationInput } from '../../types/system'
+import type { CreateProductInput, Product } from '../../types/system'
 
 const props = defineProps<{
-  submitRegistration: (payload: RegistrationInput) => Promise<Customer>
+  submitProduct: (payload: CreateProductInput) => Promise<Product>
 }>()
 
-const form = reactive<RegistrationInput>({
-  fullName: '',
-  email: '',
-  phone: '',
-  address: '',
+const form = reactive({
+  sku: '',
+  name: '',
+  category: '',
+  description: '',
+  price: '',
+  stock: '',
+  leadTimeDays: '1',
+  featured: false,
 })
 
 const submitting = ref(false)
@@ -18,10 +22,14 @@ const successMessage = ref('')
 const errorMessage = ref('')
 
 const resetForm = () => {
-  form.fullName = ''
-  form.email = ''
-  form.phone = ''
-  form.address = ''
+  form.sku = ''
+  form.name = ''
+  form.category = ''
+  form.description = ''
+  form.price = ''
+  form.stock = ''
+  form.leadTimeDays = '1'
+  form.featured = false
 }
 
 const handleSubmit = async () => {
@@ -30,12 +38,21 @@ const handleSubmit = async () => {
   errorMessage.value = ''
 
   try {
-    const customer = await props.submitRegistration({ ...form })
-    successMessage.value = `${customer.fullName} has been added to the customer list.`
+    const product = await props.submitProduct({
+      sku: form.sku,
+      name: form.name,
+      category: form.category,
+      description: form.description,
+      price: Number(form.price),
+      stock: Number(form.stock),
+      leadTimeDays: Number(form.leadTimeDays),
+      featured: form.featured,
+    })
+    successMessage.value = `${product.name} has been added to the motorcycle list.`
     resetForm()
   } catch (error) {
     errorMessage.value =
-      error instanceof Error ? error.message : 'Unable to register the customer.'
+      error instanceof Error ? error.message : 'Unable to save the motorcycle right now.'
   } finally {
     submitting.value = false
   }
@@ -46,44 +63,80 @@ const handleSubmit = async () => {
   <form class="form-card" @submit.prevent="handleSubmit">
     <div class="form-card__header">
       <div>
-        <p class="eyebrow">Registration</p>
-        <h2>Customer Registration Form</h2>
+        <p class="eyebrow">Inventory</p>
+        <h2>Add a motorcycle to the catalog</h2>
       </div>
-      <p>Save a new customer so they can place motorcycle orders in the system.</p>
+      <p>New motorcycles appear immediately in the customer catalog and order builder.</p>
     </div>
 
     <div class="form-grid">
       <label>
-        Full name
-        <input v-model="form.fullName" type="text" placeholder="Enter customer name" required />
+        SKU
+        <input v-model="form.sku" type="text" placeholder="HON-ROAD-200" required />
       </label>
 
       <label>
-        Email address
-        <input v-model="form.email" type="email" placeholder="customer@example.com" required />
+        Motorcycle name
+        <input v-model="form.name" type="text" placeholder="Honda Roadster 200" required />
       </label>
 
       <label>
-        Phone number
-        <input v-model="form.phone" type="tel" placeholder="+63 912 345 6789" required />
+        Category
+        <input v-model="form.category" type="text" placeholder="Street commuter" required />
       </label>
 
-      <label class="form-grid__wide">
-        Address
-        <textarea
-          v-model="form.address"
-          rows="4"
-          placeholder="Enter full delivery or billing address"
+      <label>
+        Price (USD)
+        <input
+          v-model="form.price"
+          type="number"
+          min="1"
+          step="1"
+          placeholder="4200"
           required
         />
       </label>
+
+      <label>
+        Stock units
+        <input
+          v-model="form.stock"
+          type="number"
+          min="0"
+          step="1"
+          placeholder="4"
+          required
+        />
+      </label>
+
+      <label>
+        Lead time (days)
+        <input v-model="form.leadTimeDays" type="number" min="1" step="1" required />
+      </label>
+
+      <label class="form-grid__wide">
+        Description
+        <textarea
+          v-model="form.description"
+          rows="4"
+          placeholder="Short summary of the motorcycle, riding style, and key strengths."
+          required
+        />
+      </label>
+
+      <label class="toggle-row form-grid__wide">
+        <input v-model="form.featured" type="checkbox" />
+        <span>Mark this motorcycle as featured in the list.</span>
+      </label>
     </div>
+
+    <p class="form-note">SKUs are stored in uppercase, and spaces are converted into hyphens.</p>
 
     <p v-if="successMessage" class="feedback feedback--success">{{ successMessage }}</p>
     <p v-if="errorMessage" class="feedback feedback--error">{{ errorMessage }}</p>
 
     <button class="submit-button" type="submit" :disabled="submitting">
-      {{ submitting ? 'Saving customer...' : 'Register customer' }}
+      {{ submitting ? 'Saving motorcycle...' : 'Add motorcycle' }}
     </button>
   </form>
 </template>
@@ -120,9 +173,13 @@ const handleSubmit = async () => {
   font-size: 1.45rem;
 }
 
+.form-card__header p:last-child,
+.form-note {
+  color: #6b5c4c;
+}
+
 .form-card__header p:last-child {
   max-width: 18rem;
-  color: #6b5c4c;
   text-align: right;
 }
 
@@ -139,7 +196,7 @@ const handleSubmit = async () => {
   font-weight: 700;
 }
 
-.form-grid input,
+.form-grid input:not([type='checkbox']),
 .form-grid textarea {
   width: 100%;
   border: 1px solid rgba(94, 70, 47, 0.14);
@@ -152,6 +209,30 @@ const handleSubmit = async () => {
 
 .form-grid__wide {
   grid-column: 1 / -1;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  border: 1px solid rgba(94, 70, 47, 0.12);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.7);
+  padding: 0.95rem 1rem;
+}
+
+.toggle-row input {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+}
+
+.toggle-row span {
+  color: #4b3b2e;
+}
+
+.form-note {
+  margin-top: 1rem;
 }
 
 .feedback {

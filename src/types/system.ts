@@ -1,4 +1,4 @@
-export type RouteKey = 'home' | 'about' | 'registration' | 'orders' | 'admin'
+export type RouteKey = 'home' | 'dashboard' | 'about' | 'registration' | 'orders' | 'admin'
 export type DeliveryMethod = 'Showroom pickup' | 'Home delivery'
 
 export interface Product {
@@ -71,6 +71,17 @@ export interface CreateOrderInput {
   }>
 }
 
+export interface CreateProductInput {
+  sku: string
+  name: string
+  category: string
+  description: string
+  price: number
+  stock: number
+  leadTimeDays: number
+  featured: boolean
+}
+
 export interface BootstrapData {
   products: Product[]
   customers: Customer[]
@@ -84,5 +95,10 @@ export interface AdminLoginInput {
 
 export interface OrderSubmissionResponse {
   order: Order
+  products: Product[]
+}
+
+export interface CreateProductResponse {
+  product: Product
   products: Product[]
 }
