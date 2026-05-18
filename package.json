@@ -16,9 +16,9 @@
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
     "db:prepare": "run-s db:generate db:push",
-    "db:generate": "prisma generate",
+    "db:generate": "node scripts/prisma-generate.mjs",
     "db:push": "prisma db push",
-    "postinstall": "prisma generate"
+    "postinstall": "node scripts/prisma-generate.mjs"
   },
   "dependencies": {
     "@prisma/adapter-better-sqlite3": "^7.8.0",
