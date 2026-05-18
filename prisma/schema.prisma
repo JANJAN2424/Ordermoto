@@ -3,12 +3,14 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Product {
   id           Int         @id @default(autoincrement())
-  sku          String      @unique(map: "sqlite_autoindex_products_1")
+  sku          String      @unique
   name         String
   category     String
   description  String

@@ -23,7 +23,7 @@ import {
   updateProduct,
 } from './database.mjs'
 
-const defaultHost = '127.0.0.1'
+const defaultHost = process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1'
 const defaultPort = 3001
 const adminSessionCookieName = 'ordermoto_admin_session'
 const adminSessionMaxAgeSeconds = 60 * 60 * 8
@@ -261,6 +261,14 @@ const createAppServer = () =>
     const requestUrl = new URL(request.url ?? '/', `http://${request.headers.host ?? '127.0.0.1'}`)
 
     try {
+      if (request.method === 'GET' && requestUrl.pathname === '/api/health') {
+        sendJson(response, 200, {
+          status: 'ok',
+          uptimeSeconds: Math.round(process.uptime()),
+        })
+        return
+      }
+
       if (request.method === 'GET' && requestUrl.pathname === '/api/bootstrap') {
         sendJson(response, 200, await getBootstrapData())
         return

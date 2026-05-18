@@ -1,35 +1,126 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import heroImage from '../assets/images/backgroundimg.jpg'
-import type { CustomerLoginInput, CustomerSessionState, RouteKey } from '../types/system'
+import type {
+  AdminLoginInput,
+  AdminSessionState,
+  CustomerLoginInput,
+  CustomerSessionState,
+  RouteKey,
+} from '../types/system'
 
 const props = defineProps<{
   loginCustomer: (payload: CustomerLoginInput) => Promise<CustomerSessionState>
+  loginAdmin: (payload: AdminLoginInput) => Promise<AdminSessionState>
+  initialMode?: 'customer' | 'admin'
 }>()
 
 const emit = defineEmits<{
   navigate: [route: RouteKey]
 }>()
 
-const form = reactive<CustomerLoginInput>({
+const customerForm = reactive<CustomerLoginInput>({
   email: '',
+  password: '',
+})
+const adminForm = reactive<AdminLoginInput>({
+  username: '',
   password: '',
 })
 
 const submitting = ref(false)
 const errorMessage = ref('')
 const showPassword = ref(false)
+const authMode = ref<'customer' | 'admin'>(props.initialMode ?? 'customer')
+
+const isAdminMode = computed(() => authMode.value === 'admin')
+const activeCredential = computed({
+  get: () => (isAdminMode.value ? adminForm.username : customerForm.email),
+  set: (value: string) => {
+    if (isAdminMode.value) {
+      adminForm.username = value
+      return
+    }
+
+    customerForm.email = value
+  },
+})
+const activePassword = computed({
+  get: () => (isAdminMode.value ? adminForm.password : customerForm.password),
+  set: (value: string) => {
+    if (isAdminMode.value) {
+      adminForm.password = value
+      return
+    }
+
+    customerForm.password = value
+  },
+})
+const modeCopy = computed(() =>
+  isAdminMode.value
+    ? {
+        backRoute: 'dashboard' as const,
+        backLabel: 'Back to dashboard',
+        credentialLabel: 'Username',
+        credentialPlaceholder: 'Enter your admin username',
+        credentialType: 'text',
+        credentialAutocomplete: 'username',
+        hint: 'Use the admin credentials configured in `.env`.',
+        submitLabel: 'Open Admin Workspace',
+        submittingLabel: 'Opening admin workspace...',
+        switchPrompt: 'Need a customer account instead?',
+        switchAction: 'Switch to customer sign in',
+      }
+    : {
+        backRoute: 'registration' as const,
+        backLabel: 'Back to registration',
+        credentialLabel: 'Email address',
+        credentialPlaceholder: 'Enter your email',
+        credentialType: 'email',
+        credentialAutocomplete: 'email',
+        hint: 'Use the same email and password saved on the register page.',
+        submitLabel: 'Continue to Orders',
+        submittingLabel: 'Signing in...',
+        switchPrompt: 'Need admin access?',
+        switchAction: 'Switch to admin sign in',
+      },
+)
+
+watch(
+  () => props.initialMode,
+  (nextMode) => {
+    authMode.value = nextMode ?? 'customer'
+    errorMessage.value = ''
+    showPassword.value = false
+  },
+)
+
+const switchMode = (mode: 'customer' | 'admin') => {
+  authMode.value = mode
+  errorMessage.value = ''
+  showPassword.value = false
+  emit('navigate', mode === 'admin' ? 'admin' : 'login')
+}
 
 const handleSubmit = async () => {
   submitting.value = true
   errorMessage.value = ''
 
   try {
-    await props.loginCustomer({ ...form })
-    form.password = ''
+    if (isAdminMode.value) {
+      await props.loginAdmin({ ...adminForm })
+      adminForm.password = ''
+    } else {
+      await props.loginCustomer({ ...customerForm })
+      customerForm.password = ''
+    }
   } catch (error) {
     errorMessage.value =
-      error instanceof Error ? error.message : 'Unable to sign in to the customer account.'
+      error instanceof Error
+        ? error.message
+        : isAdminMode.value
+          ? 'Unable to sign in as admin.'
+          : 'Unable to sign in to the customer account.'
   } finally {
     submitting.value = false
   }
@@ -57,14 +148,14 @@ const handleSubmit = async () => {
         </div>
 
         <div class="auth-visual__copy">
-          <p class="auth-visual__eyebrow">Customer Login</p>
-          <h2>Sign in with the customer profile you created during registration.</h2>
-          <p>Continue to orders faster and keep purchases attached to the right buyer account.</p>
+          <p class="auth-visual__eyebrow">Unified Login</p>
+          <h2>Customers and admins now sign in from the same Ordermoto page.</h2>
+          <p>Choose the right access mode inside the form and continue without leaving the screen.</p>
         </div>
       </aside>
 
       <section class="auth-card">
-        <button type="button" class="back-link" @click="emit('navigate', 'registration')">
+        <button type="button" class="back-link" @click="emit('navigate', modeCopy.backRoute)">
           <span class="back-link__icon" aria-hidden="true">
             <svg viewBox="0 0 24 24">
               <path
@@ -77,7 +168,7 @@ const handleSubmit = async () => {
               />
             </svg>
           </span>
-          <span>Back to registration</span>
+          <span>{{ modeCopy.backLabel }}</span>
         </button>
 
         <div class="auth-card__brand">
@@ -97,16 +188,39 @@ const handleSubmit = async () => {
         </div>
 
         <header class="auth-card__header">
-          <h1>Customer Sign In</h1>
-          <p>Use the email and password created during customer registration</p>
+          <h1>Sign In</h1>
+          <p>Choose customer or admin access, then enter the matching credentials.</p>
         </header>
 
         <form class="auth-form" @submit.prevent="handleSubmit">
+          <div class="auth-mode-toggle" role="tablist" aria-label="Choose sign-in mode">
+            <button
+              type="button"
+              role="tab"
+              class="auth-mode-toggle__button"
+              :class="{ 'auth-mode-toggle__button--active': !isAdminMode }"
+              :aria-selected="!isAdminMode"
+              @click="switchMode('customer')"
+            >
+              Customer
+            </button>
+            <button
+              type="button"
+              role="tab"
+              class="auth-mode-toggle__button"
+              :class="{ 'auth-mode-toggle__button--active': isAdminMode }"
+              :aria-selected="isAdminMode"
+              @click="switchMode('admin')"
+            >
+              Admin
+            </button>
+          </div>
+
           <label class="field">
-            <span>Email address</span>
+            <span>{{ modeCopy.credentialLabel }}</span>
             <div class="field__control">
               <span class="field__icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24">
+                <svg v-if="!isAdminMode" viewBox="0 0 24 24">
                   <path
                     d="M4 6h16v12H4zM4 7l8 6 8-6"
                     fill="none"
@@ -116,11 +230,22 @@ const handleSubmit = async () => {
                     stroke-width="1.8"
                   />
                 </svg>
+                <svg v-else viewBox="0 0 24 24">
+                  <path
+                    d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8c0-3.3 3.1-6 7-6s7 2.7 7 6"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.8"
+                  />
+                </svg>
               </span>
               <input
-                v-model="form.email"
-                type="email"
-                placeholder="Enter your email"
+                v-model="activeCredential"
+                :type="modeCopy.credentialType"
+                :autocomplete="modeCopy.credentialAutocomplete"
+                :placeholder="modeCopy.credentialPlaceholder"
                 required
               />
             </div>
@@ -142,9 +267,10 @@ const handleSubmit = async () => {
                 </svg>
               </span>
               <input
-                v-model="form.password"
+                v-model="activePassword"
                 :type="showPassword ? 'text' : 'password'"
                 placeholder="Enter your password"
+                autocomplete="current-password"
                 required
               />
               <button
@@ -167,16 +293,16 @@ const handleSubmit = async () => {
             </div>
           </label>
 
-          <p class="auth-form__hint">Use the same email and password saved on the register page.</p>
+          <p class="auth-form__hint">{{ modeCopy.hint }}</p>
 
           <p v-if="errorMessage" class="feedback feedback--error">{{ errorMessage }}</p>
 
           <button class="submit-button" type="submit" :disabled="submitting">
-            {{ submitting ? 'Signing in...' : 'Sign In' }}
+            {{ submitting ? modeCopy.submittingLabel : modeCopy.submitLabel }}
           </button>
         </form>
 
-        <p class="auth-footer">
+        <p v-if="!isAdminMode" class="auth-footer">
           Need to create a customer profile?
           <button type="button" class="text-link" @click="emit('navigate', 'registration')">
             Register here
@@ -184,9 +310,13 @@ const handleSubmit = async () => {
         </p>
 
         <p class="auth-footer auth-footer--secondary">
-          Need admin access?
-          <button type="button" class="text-link" @click="emit('navigate', 'admin')">
-            Admin login
+          {{ modeCopy.switchPrompt }}
+          <button
+            type="button"
+            class="text-link"
+            @click="switchMode(isAdminMode ? 'customer' : 'admin')"
+          >
+            {{ modeCopy.switchAction }}
           </button>
         </p>
       </section>
@@ -380,6 +510,41 @@ const handleSubmit = async () => {
 .auth-form {
   display: grid;
   gap: 1rem;
+}
+
+.auth-mode-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.auth-mode-toggle__button {
+  border: 1px solid rgba(16, 24, 40, 0.12);
+  border-radius: 1rem;
+  background: rgba(247, 248, 250, 0.9);
+  color: #4f5968;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+  padding: 0.9rem 1rem;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.auth-mode-toggle__button:hover,
+.auth-mode-toggle__button--active {
+  transform: translateY(-1px);
+  border-color: rgba(255, 106, 0, 0.18);
+  box-shadow: 0 14px 24px rgba(15, 17, 22, 0.08);
+}
+
+.auth-mode-toggle__button--active {
+  background: linear-gradient(135deg, #ff7a1a, #ff5a00);
+  color: #ffffff;
 }
 
 .field {

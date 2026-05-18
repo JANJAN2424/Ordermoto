@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import AppShell from './components/layout/J-AppShell.vue'
-import AdminLoginScreen from './screens/J-AdminLoginScreen.vue'
 import AdminScreen from './screens/J-AdminScreen.vue'
 import AboutScreen from './screens/J-AboutScreen.vue'
 import CustomerLoginScreen from './screens/J-CustomerLoginScreen.vue'
@@ -118,8 +117,7 @@ const navigationItems = computed<Array<{ key: RouteKey; label: string; helper: s
     { key: 'dashboard', label: 'Dashboard', helper: 'Overview and quick actions' },
     { key: 'about', label: 'Motorcycles', helper: 'Available product catalog' },
     { key: 'registration', label: 'Registration', helper: 'Customer form' },
-    { key: 'login', label: 'Customer login', helper: 'Customer account access' },
-    { key: 'admin', label: 'Admin login', helper: 'Administrator access' },
+    { key: 'login', label: 'Sign in', helper: 'Customer and admin access' },
   ]
 })
 
@@ -261,7 +259,7 @@ const signOutCurrentSession = async () => {
       adminSession.value = createEmptyAdminSession()
     }
 
-    navigate('admin')
+    navigate('login')
   }
 
   if (customerSession.value.authenticated) {
@@ -301,13 +299,13 @@ onBeforeUnmount(() => {
   />
 
   <CustomerLoginScreen
-    v-else-if="currentRoute === 'login' && !customerSession.authenticated"
+    v-else-if="
+      (currentRoute === 'login' || currentRoute === 'admin') &&
+      !adminSession.authenticated &&
+      !customerSession.authenticated
+    "
+    :initial-mode="currentRoute === 'admin' ? 'admin' : 'customer'"
     :login-customer="signInCustomer"
-    @navigate="navigate"
-  />
-
-  <AdminLoginScreen
-    v-else-if="currentRoute === 'admin' && !adminSession.authenticated"
     :login-admin="signInAdmin"
     @navigate="navigate"
   />

@@ -1,21 +1,24 @@
-import 'dotenv/config'
+import './load-env.mjs'
 
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
 
-import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3'
 import { PrismaClient } from '@prisma/client'
 
 const connectionString = process.env.DATABASE_URL
 
 if (!connectionString) {
-  throw new Error('DATABASE_URL is not configured for Prisma.')
+  throw new Error(
+    'DATABASE_URL is not configured. Set it in .env.local or .env to your Supabase pooled PostgreSQL connection string.',
+  )
 }
 
-const adapter = new PrismaBetterSqlite3({
-  url: connectionString,
-})
+if (!/^postgres(ql)?:\/\//i.test(connectionString)) {
+  throw new Error(
+    'DATABASE_URL must be a PostgreSQL connection string. For Supabase, use the pooled database URL from Project Settings > Database.',
+  )
+}
 
-const prisma = new PrismaClient({ adapter })
+const prisma = new PrismaClient()
 const sessionDurationMs = 1000 * 60 * 60 * 8
 const defaultAdminUsername = process.env.ADMIN_USERNAME?.trim() || 'admin'
 const defaultAdminPassword = process.env.ADMIN_PASSWORD?.trim() || 'admin123'
