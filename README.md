@@ -26,15 +26,23 @@ See [Vite Configuration Reference](https://vite.dev/config/).
 ## Supabase Setup
 
 1. Create a Supabase project.
-2. Open `Project Settings` > `Database` and copy the PostgreSQL connection string.
-3. Create `.env.local` with your Supabase database URLs. Use the pooled connection for runtime queries and the direct connection for Prisma migrations:
+2. Open `Project Settings` > `API` and copy:
+   - `Project URL` into `SUPABASE_URL`
+   - the publishable or anon key into `SUPABASE_ANON_KEY`
+   - the service role key into `SUPABASE_SERVICE_ROLE_KEY`
+3. Open `Project Settings` > `Database` and copy the PostgreSQL connection strings.
+4. In `Authentication` > `Providers` > `Email`, keep email/password enabled. The `OAuth Apps` page in the dashboard is not used for basic customer registration.
+5. Create `.env.local` with your Supabase Auth and database values:
 
 ```env
+SUPABASE_URL="https://<project-ref>.supabase.co"
+SUPABASE_ANON_KEY="sb_publishable_..."
+SUPABASE_SERVICE_ROLE_KEY="eyJ..."
 DATABASE_URL="postgresql://postgres.<project-ref>:<password>@<pooler-host>:6543/postgres?pgbouncer=true"
 DIRECT_URL="postgresql://postgres.<project-ref>:<password>@<direct-host>:5432/postgres"
 ```
 
-4. Keep or update the admin credentials in `.env`:
+6. Keep or update the admin credentials in `.env`:
 
 ```env
 ADMIN_USERNAME="masteradmin"
@@ -42,19 +50,28 @@ ADMIN_PASSWORD="masteradmin123"
 ADMIN_DISPLAY_NAME="Ordermoto Administrator"
 ```
 
-5. Push the Prisma schema to Supabase:
+7. Optional for split frontend/API hosting: if the Vue frontend is served from a different HTTPS origin than the Node server, add these too:
+
+```env
+CLIENT_ORIGIN="https://app.example.com"
+VITE_API_BASE_URL="https://api.example.com"
+```
+
+`CLIENT_ORIGIN` belongs on the Node server so it can allow credentialed browser requests. `VITE_API_BASE_URL` belongs in the frontend build so `/api/*` calls reach the Node server instead of the static host.
+
+8. Push the Prisma schema to Supabase:
 
 ```sh
 npm run db:push
 ```
 
-6. Start the app:
+9. Start the app:
 
 ```sh
 npm run dev
 ```
 
-The app still uses its existing customer/admin login flow and stores that data inside your Supabase PostgreSQL database. It does not require Supabase Auth unless you want to add that separately later.
+Customer registration and customer password login now run through Supabase Auth. Admin login still uses the app's existing server-side credentials.
 
 ## Project Setup
 
@@ -86,11 +103,21 @@ Set these on your host instead of committing secrets:
 NODE_ENV=production
 HOST=0.0.0.0
 PORT=3001
+CLIENT_ORIGIN=https://app.example.com
+SUPABASE_URL="https://<project-ref>.supabase.co"
+SUPABASE_ANON_KEY="sb_publishable_..."
+SUPABASE_SERVICE_ROLE_KEY="eyJ..."
 DATABASE_URL="postgresql://postgres.<project-ref>:<password>@<pooler-host>:6543/postgres?pgbouncer=true"
 DIRECT_URL="postgresql://postgres.<project-ref>:<password>@<direct-host>:5432/postgres"
 ADMIN_USERNAME="masteradmin"
 ADMIN_PASSWORD="change-this-before-production"
 ADMIN_DISPLAY_NAME="Ordermoto Administrator"
+```
+
+If the frontend is built on a separate origin, also set:
+
+```env
+VITE_API_BASE_URL="https://api.example.com"
 ```
 
 You can use [.env.production.example](./.env.production.example) as a reference.
@@ -143,4 +170,4 @@ docker run --env-file .env.production -p 3001:3001 ordermoto
 ### Notes
 
 - `npm start` no longer runs `prisma db push` automatically, which is safer for production restarts.
-- If you deploy the frontend and backend on different domains later, you will need extra CORS and cookie changes before login works correctly.
+- Cross-origin login requires HTTPS because the auth cookies switch to `SameSite=None; Secure` when `CLIENT_ORIGIN` is set.

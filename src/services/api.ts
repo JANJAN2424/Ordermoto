@@ -17,21 +17,85 @@ import type {
   DeleteProductResponse,
 } from '../types/system'
 
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/, '') ?? ''
+
+const createRequestUrl = (path: string) => {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  return configuredApiBaseUrl ? `${configuredApiBaseUrl}${normalizedPath}` : normalizedPath
+}
+
+const getRoutingHint = (path: string) =>
+  configuredApiBaseUrl
+    ? `Check VITE_API_BASE_URL, CLIENT_ORIGIN, and confirm the Node API server is reachable for ${path}.`
+    : `Check that the Node server is running and that requests to ${path} reach it.`
+
+const getResponsePreview = (text: string) =>
+  text.replace(/\s+/g, ' ').trim().slice(0, 160)
+
+const createNonJsonResponseError = (path: string, contentType: string, text: string) => {
+  const preview = getResponsePreview(text)
+  const looksLikeHtml =
+    /text\/html/i.test(contentType) ||
+    /^<!doctype html/i.test(preview) ||
+    /^<html/i.test(preview) ||
+    /the page could not be found/i.test(preview)
+
+  if (looksLikeHtml) {
+    return new Error(`The API request to ${path} returned HTML instead of JSON. ${getRoutingHint(path)}`)
+  }
+
+  if (preview) {
+    return new Error(
+      `The API request to ${path} returned a non-JSON response: ${preview}`,
+    )
+  }
+
+  return new Error(`The API request to ${path} returned a non-JSON response. ${getRoutingHint(path)}`)
+}
+
+const parseJsonPayload = (path: string, text: string) => {
+  try {
+    return JSON.parse(text)
+  } catch {
+    throw new Error(`The API returned invalid JSON for ${path}. ${getRoutingHint(path)}`)
+  }
+}
+
 const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
-  const response = await fetch(path, {
-    credentials: 'same-origin',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init?.headers ?? {}),
-    },
-    ...init,
-  })
+  let response: Response
+
+  try {
+    response = await fetch(createRequestUrl(path), {
+      credentials: configuredApiBaseUrl ? 'include' : 'same-origin',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(init?.headers ?? {}),
+      },
+      ...init,
+    })
+  } catch {
+    throw new Error(`Unable to reach ${path}. ${getRoutingHint(path)}`)
+  }
 
   const text = await response.text()
-  const payload = text ? JSON.parse(text) : null
+  const contentType = response.headers.get('Content-Type') ?? ''
+  const expectsJson = /\bapplication\/json\b/i.test(contentType)
+  const payload = text ? (expectsJson ? parseJsonPayload(path, text) : null) : null
 
   if (!response.ok) {
-    throw new Error(payload?.message ?? 'Request failed.')
+    if (payload && typeof payload === 'object' && 'message' in payload && typeof payload.message === 'string') {
+      throw new Error(payload.message)
+    }
+
+    throw createNonJsonResponseError(path, contentType, text)
+  }
+
+  if (!text) {
+    return null as T
+  }
+
+  if (!expectsJson) {
+    throw createNonJsonResponseError(path, contentType, text)
   }
 
   return payload as T

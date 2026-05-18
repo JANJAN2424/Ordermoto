@@ -29,6 +29,8 @@ const adminSessionCookieName = 'ordermoto_admin_session'
 const adminSessionMaxAgeSeconds = 60 * 60 * 8
 const customerSessionCookieName = 'ordermoto_customer_session'
 const customerSessionMaxAgeSeconds = 60 * 60 * 8
+const configuredClientOrigin = process.env.CLIENT_ORIGIN?.trim() ?? ''
+const usesCrossOriginClient = Boolean(configuredClientOrigin)
 
 const contentTypes = {
   '.css': 'text/css; charset=utf-8',
@@ -38,21 +40,41 @@ const contentTypes = {
   '.svg': 'image/svg+xml',
 }
 
-const withCors = (response) => {
-  response.setHeader('Access-Control-Allow-Origin', '*')
+const appendVaryHeader = (response, value) => {
+  const currentValue = response.getHeader('Vary')
+  const values = new Set(
+    String(currentValue ?? '')
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean),
+  )
+
+  values.add(value)
+  response.setHeader('Vary', [...values].join(', '))
+}
+
+const withCors = (request, response) => {
+  const requestOrigin = request.headers.origin?.trim() ?? ''
+
+  if (configuredClientOrigin && requestOrigin === configuredClientOrigin) {
+    response.setHeader('Access-Control-Allow-Origin', configuredClientOrigin)
+    response.setHeader('Access-Control-Allow-Credentials', 'true')
+    appendVaryHeader(response, 'Origin')
+  } else if (!configuredClientOrigin) {
+    response.setHeader('Access-Control-Allow-Origin', '*')
+  }
+
   response.setHeader('Access-Control-Allow-Headers', 'Content-Type')
   response.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
 }
 
 const sendJson = (response, statusCode, payload) => {
-  withCors(response)
   response.statusCode = statusCode
   response.setHeader('Content-Type', 'application/json; charset=utf-8')
   response.end(JSON.stringify(payload))
 }
 
 const sendText = (response, statusCode, payload) => {
-  withCors(response)
   response.statusCode = statusCode
   response.setHeader('Content-Type', 'text/plain; charset=utf-8')
   response.end(payload)
@@ -114,8 +136,8 @@ const setAdminSessionCookie = (response, sessionToken) => {
       path: '/',
       maxAge: adminSessionMaxAgeSeconds,
       httpOnly: true,
-      sameSite: 'Lax',
-      secure: process.env.NODE_ENV === 'production',
+      sameSite: usesCrossOriginClient ? 'None' : 'Lax',
+      secure: usesCrossOriginClient || process.env.NODE_ENV === 'production',
     }),
   )
 }
@@ -127,8 +149,8 @@ const clearAdminSessionCookie = (response) => {
       path: '/',
       maxAge: 0,
       httpOnly: true,
-      sameSite: 'Lax',
-      secure: process.env.NODE_ENV === 'production',
+      sameSite: usesCrossOriginClient ? 'None' : 'Lax',
+      secure: usesCrossOriginClient || process.env.NODE_ENV === 'production',
     }),
   )
 }
@@ -143,8 +165,8 @@ const setCustomerSessionCookie = (response, sessionToken) => {
       path: '/',
       maxAge: customerSessionMaxAgeSeconds,
       httpOnly: true,
-      sameSite: 'Lax',
-      secure: process.env.NODE_ENV === 'production',
+      sameSite: usesCrossOriginClient ? 'None' : 'Lax',
+      secure: usesCrossOriginClient || process.env.NODE_ENV === 'production',
     }),
   )
 }
@@ -156,8 +178,8 @@ const clearCustomerSessionCookie = (response) => {
       path: '/',
       maxAge: 0,
       httpOnly: true,
-      sameSite: 'Lax',
-      secure: process.env.NODE_ENV === 'production',
+      sameSite: usesCrossOriginClient ? 'None' : 'Lax',
+      secure: usesCrossOriginClient || process.env.NODE_ENV === 'production',
     }),
   )
 }
@@ -250,7 +272,7 @@ const serveStaticFile = async (response, requestedPath) => {
 
 const createAppServer = () =>
   createServer(async (request, response) => {
-    withCors(response)
+    withCors(request, response)
 
     if (request.method === 'OPTIONS') {
       response.statusCode = 204

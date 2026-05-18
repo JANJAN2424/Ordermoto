@@ -3,6 +3,11 @@ import './load-env.mjs'
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
 
 import { PrismaClient } from '@prisma/client'
+import {
+  deleteCustomerAuthUser,
+  registerCustomerAuthUser,
+  signInCustomerWithSupabase,
+} from './supabase-auth.mjs'
 
 const connectionString = process.env.DATABASE_URL
 
@@ -92,6 +97,8 @@ const unauthorized = (message) => {
 
 const nowIso = () => new Date().toISOString()
 const normalizeEmail = (value) => value?.trim().toLowerCase() ?? ''
+const readAuthMetadataText = (record, key) =>
+  typeof record?.[key] === 'string' ? record[key].trim() : ''
 
 const hashPassword = (password) => {
   const salt = randomBytes(16).toString('hex')
@@ -402,21 +409,54 @@ export const loginCustomer = async (input) => {
     throw badRequest('Enter the registered email and password.')
   }
 
-  const customer = await prisma.customer.findFirst({
-    where: {
-      email,
-    },
+  const authUser = await signInCustomerWithSupabase({
+    email,
+    password,
   })
+  const fullNameFromMetadata =
+    readAuthMetadataText(authUser.metadata, 'fullName') ||
+    readAuthMetadataText(authUser.metadata, 'full_name') ||
+    authUser.email.split('@')[0]
+  const phoneFromMetadata = readAuthMetadataText(authUser.metadata, 'phone')
+  const addressFromMetadata = readAuthMetadataText(authUser.metadata, 'address')
 
-  if (customer && !customer.passwordHash) {
-    throw badRequest(
-      'This customer account needs a password. Register again with the same email to set one.',
-    )
-  }
+  const existingCustomer =
+    (await prisma.customer.findUnique({
+      where: {
+        authUserId: authUser.userId,
+      },
+    })) ||
+    (await prisma.customer.findUnique({
+      where: {
+        email: authUser.email,
+      },
+    }))
 
-  if (!customer || !verifyPassword(password, customer.passwordHash)) {
-    throw unauthorized('Invalid customer email or password.')
-  }
+  const customer = existingCustomer
+    ? await prisma.customer.update({
+        where: {
+          id: existingCustomer.id,
+        },
+        data: {
+          authUserId: authUser.userId,
+          email: authUser.email,
+          passwordHash: '',
+          fullName: existingCustomer.fullName || fullNameFromMetadata,
+          phone: existingCustomer.phone || phoneFromMetadata,
+          address: existingCustomer.address || addressFromMetadata,
+        },
+      })
+    : await prisma.customer.create({
+        data: {
+          authUserId: authUser.userId,
+          fullName: fullNameFromMetadata,
+          email: authUser.email,
+          phone: phoneFromMetadata,
+          address: addressFromMetadata,
+          passwordHash: '',
+          registeredAt: new Date().toISOString(),
+        },
+      })
 
   const sessionToken = createSessionToken()
   const createdAt = nowIso()
@@ -479,40 +519,63 @@ export const createCustomer = async (input) => {
     throw badRequest('Password must be at least 6 characters long.')
   }
 
-  const existingCustomer = await prisma.customer.findFirst({
+  const existingCustomer = await prisma.customer.findUnique({
     where: {
       email,
     },
   })
 
-  if (existingCustomer?.passwordHash) {
+  if (existingCustomer?.authUserId) {
     throw badRequest('A customer account with this email already exists.')
   }
 
-  const customer = existingCustomer
-    ? await prisma.customer.update({
-        where: {
-          id: existingCustomer.id,
-        },
-        data: {
-          fullName,
-          phone,
-          address,
-          passwordHash: hashPassword(password),
-        },
-      })
-    : await prisma.customer.create({
-        data: {
-          fullName,
-          email,
-          phone,
-          address,
-          passwordHash: hashPassword(password),
-          registeredAt: new Date().toISOString(),
-        },
-      })
+  const { userId } = await registerCustomerAuthUser({
+    email,
+    password,
+    metadata: {
+      fullName,
+      phone,
+      address,
+    },
+  })
 
-  return serializeCustomer(customer)
+  try {
+    const customer = existingCustomer
+      ? await prisma.customer.update({
+          where: {
+            id: existingCustomer.id,
+          },
+          data: {
+            authUserId: userId,
+            fullName,
+            email,
+            phone,
+            address,
+            passwordHash: '',
+          },
+        })
+      : await prisma.customer.create({
+          data: {
+            authUserId: userId,
+            fullName,
+            email,
+            phone,
+            address,
+            passwordHash: '',
+            registeredAt: new Date().toISOString(),
+          },
+        })
+
+    return serializeCustomer(customer)
+  } catch (error) {
+    try {
+      await deleteCustomerAuthUser(userId)
+    } catch {
+      // Keep the original database error if rollback fails.
+    }
+
+    throw error
+  }
 }
 
 export const createProduct = async (input) => {
