@@ -56,22 +56,6 @@ const handleSubmit = async () => {
 <template>
   <section class="register-page" :style="{ '--register-image': `url(${heroImage})` }">
     <div class="register-shell">
-      <button type="button" class="back-link" @click="emit('navigate', 'login')">
-        <span class="back-link__icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24">
-            <path
-              d="M15 18l-6-6 6-6M9 12h10"
-              fill="none"
-              stroke="currentColor"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="1.8"
-            />
-          </svg>
-        </span>
-        <span>Back to login</span>
-      </button>
-
       <article class="register-card">
         <div class="register-card__brand">
           <span class="register-card__brand-mark">
@@ -351,7 +335,6 @@ const handleSubmit = async () => {
   box-shadow: 0 26px 70px rgba(15, 17, 22, 0.2);
 }
 
-.back-link,
 .text-link,
 .field__toggle {
   border: 0;
@@ -360,35 +343,11 @@ const handleSubmit = async () => {
   font: inherit;
 }
 
-.back-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  color: rgba(255, 255, 255, 0.86);
-  font-weight: 700;
-}
-
-.back-link__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.back-link__icon svg {
-  width: 1rem;
-  height: 1rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
-}
-
 .register-card {
   position: relative;
   overflow: hidden;
   width: min(100%, 1040px);
-  margin: 1rem auto 0;
+  margin: 0 auto;
   border-radius: 2rem;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.94)),

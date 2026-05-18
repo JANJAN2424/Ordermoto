@@ -59,8 +59,6 @@ const activePassword = computed({
 const modeCopy = computed(() =>
   isAdminMode.value
     ? {
-        backRoute: 'dashboard' as const,
-        backLabel: 'Back to dashboard',
         credentialLabel: 'Username',
         credentialPlaceholder: 'Enter your admin username',
         credentialType: 'text',
@@ -72,8 +70,6 @@ const modeCopy = computed(() =>
         switchAction: 'Switch to customer sign in',
       }
     : {
-        backRoute: 'registration' as const,
-        backLabel: 'Back to registration',
         credentialLabel: 'Email address',
         credentialPlaceholder: 'Enter your email',
         credentialType: 'email',
@@ -155,22 +151,6 @@ const handleSubmit = async () => {
       </aside>
 
       <section class="auth-card">
-        <button type="button" class="back-link" @click="emit('navigate', modeCopy.backRoute)">
-          <span class="back-link__icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24">
-              <path
-                d="M15 18l-6-6 6-6M9 12h10"
-                fill="none"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="1.8"
-              />
-            </svg>
-          </span>
-          <span>{{ modeCopy.backLabel }}</span>
-        </button>
-
         <div class="auth-card__brand">
           <span class="auth-card__brand-mark">
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -452,38 +432,12 @@ const handleSubmit = async () => {
   border: 1px solid rgba(16, 24, 40, 0.08);
 }
 
-.back-link,
 .text-link,
 .field__toggle {
   border: 0;
   background: transparent;
   cursor: pointer;
   font: inherit;
-}
-
-.back-link {
-  justify-self: start;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  color: #3c4657;
-  font-weight: 700;
-}
-
-.back-link__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.back-link__icon svg {
-  width: 1rem;
-  height: 1rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
 }
 
 .auth-card__brand {
