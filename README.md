@@ -42,14 +42,6 @@ DATABASE_URL="postgresql://postgres.<project-ref>:<password>@<pooler-host>:6543/
 DIRECT_URL="postgresql://postgres.<project-ref>:<password>@<direct-host>:5432/postgres"
 ```
 
-6. Keep or update the admin credentials in `.env`:
-
-```env
-ADMIN_USERNAME="masteradmin"
-ADMIN_EMAIL="masteradmin@gmail.com"
-ADMIN_PASSWORD="masteradmin123"
-ADMIN_DISPLAY_NAME="Ordermoto Administrator"
-```
 
 7. Optional for split frontend/API hosting: if the Vue frontend is served from a different HTTPS origin than the Node server, add these too:
 
