@@ -98,6 +98,7 @@ const unauthorized = (message) => {
 
 const nowIso = () => new Date().toISOString()
 const normalizeEmail = (value) => value?.trim().toLowerCase() ?? ''
+const normalizeUsername = (value) => value?.trim().toLowerCase() ?? ''
 const readAuthMetadataText = (record, key) =>
   typeof record?.[key] === 'string' ? record[key].trim() : ''
 
@@ -296,18 +297,8 @@ const createAdminSessionRecord = async (adminUser, client = prisma) => {
   }
 }
 
-export const initializeDatabase = async () => {
-  await prisma.$connect()
-
-  for (const product of seededProducts) {
-    await prisma.product.upsert({
-      where: { sku: product.sku },
-      create: product,
-      update: {},
-    })
-  }
-
-  await prisma.adminUser.upsert({
+const upsertDefaultAdminUser = async (client = prisma) =>
+  client.adminUser.upsert({
     where: {
       username: defaultAdminUsername,
     },
@@ -324,6 +315,36 @@ export const initializeDatabase = async () => {
       passwordHash: hashPassword(defaultAdminPassword),
     },
   })
+
+const matchesDefaultAdminIdentity = ({ email = '', username = '' }) =>
+  (email && normalizeEmail(email) === defaultAdminEmail) ||
+  (username && normalizeUsername(username) === normalizeUsername(defaultAdminUsername))
+
+const authenticateDefaultAdmin = async ({ email = '', username = '', password }, client = prisma) => {
+  if (!matchesDefaultAdminIdentity({ email, username })) {
+    return null
+  }
+
+  if (password !== defaultAdminPassword) {
+    throw unauthorized('Invalid admin email or password.')
+  }
+
+  const adminUser = await upsertDefaultAdminUser(client)
+  return createAdminSessionRecord(adminUser, client)
+}
+
+export const initializeDatabase = async () => {
+  await prisma.$connect()
+
+  for (const product of seededProducts) {
+    await prisma.product.upsert({
+      where: { sku: product.sku },
+      create: product,
+      update: {},
+    })
+  }
+
+  await upsertDefaultAdminUser()
 
   await prisma.adminSession.deleteMany({
     where: {
@@ -397,6 +418,16 @@ export const loginAdmin = async (input) => {
     throw badRequest('Enter the admin email or username and password.')
   }
 
+  const defaultAdminSession = await authenticateDefaultAdmin({
+    email,
+    username,
+    password,
+  })
+
+  if (defaultAdminSession) {
+    return defaultAdminSession
+  }
+
   const adminUser =
     (email
       ? await prisma.adminUser.findFirst({
@@ -426,6 +457,19 @@ export const loginAccount = async (input) => {
 
   if (!email || !password) {
     throw badRequest('Enter your email and password.')
+  }
+
+  const defaultAdminSession = await authenticateDefaultAdmin({
+    email,
+    password,
+  })
+
+  if (defaultAdminSession) {
+    return {
+      role: 'admin',
+      sessionToken: defaultAdminSession.sessionToken,
+      session: defaultAdminSession.session,
+    }
   }
 
   const adminUser = await prisma.adminUser.findFirst({

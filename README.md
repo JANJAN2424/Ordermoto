@@ -1,6 +1,6 @@
 # ordermoto
 
-Ordermoto is a Vue 3 + Node + Prisma motorcycle ordering system. The backend is set up to use a PostgreSQL database, which makes it compatible with Supabase.
+Ordermoto is a Vue 3 + Node + Prisma motorcycle ordering system. The backend is set up to use a Supabase PostgreSQL database.
 
 ## Recommended IDE Setup
 
@@ -74,6 +74,7 @@ npm run dev
 
 For local development, the app now ignores `VITE_API_BASE_URL` by default so Vite can proxy `/api/*` to `http://127.0.0.1:3001` using [vite.config.ts](./vite.config.ts). If you intentionally want local dev to call a remote API instead, set `VITE_FORCE_API_BASE_URL=true`. If you also need the Node server to honor `CLIENT_ORIGIN` in development, set `FORCE_CLIENT_ORIGIN_IN_DEV=true`.
 If you need to sync Prisma after schema or environment changes, run `npm run dev:setup` manually before `npm run dev`.
+This project no longer uses a local SQLite fallback. Local and deployed environments should both point to Supabase through `DATABASE_URL` and `DIRECT_URL`.
 
 Customer registration runs through Supabase Auth, and both customers and admins now use the same email/password sign-in page. The seeded admin account defaults to `masteradmin@gmail.com`.
 

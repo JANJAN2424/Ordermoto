@@ -38,6 +38,8 @@ let clockTimer: number | undefined
 const mobileBreakpoint = 1180
 const isCompactLayout = ref(false)
 const navOpen = ref(true)
+const profileMenuOpen = ref(false)
+const profileMenuRef = ref<HTMLElement | null>(null)
 
 const timestampFormatter = new Intl.DateTimeFormat('en-US', {
   dateStyle: 'medium',
@@ -73,7 +75,7 @@ const userPrimaryLabel = computed(
 
 const userSecondaryLabel = computed(() =>
   props.adminSession.authenticated
-    ? props.adminSession.admin?.username ?? 'Administrator'
+    ? props.adminSession.admin?.email ?? props.adminSession.admin?.username ?? 'Administrator'
     : props.customerSession.authenticated
       ? props.customerSession.customer?.email ?? 'Customer account'
       : 'Public workspace',
@@ -100,8 +102,40 @@ const closeNav = () => {
   navOpen.value = false
 }
 
+const closeProfileMenu = () => {
+  profileMenuOpen.value = false
+}
+
+const toggleProfileMenu = () => {
+  if (!hasAuthenticatedSession.value) {
+    return
+  }
+
+  profileMenuOpen.value = !profileMenuOpen.value
+}
+
+const handleWindowPointerDown = (event: PointerEvent) => {
+  if (!profileMenuOpen.value) {
+    return
+  }
+
+  const menu = profileMenuRef.value
+  const target = event.target
+
+  if (menu && target instanceof Node && !menu.contains(target)) {
+    closeProfileMenu()
+  }
+}
+
+const handleWindowKeyDown = (event: KeyboardEvent) => {
+  if (event.key === 'Escape') {
+    closeProfileMenu()
+  }
+}
+
 const handleNavigate = (route: RouteKey) => {
   emit('navigate', route)
+  closeProfileMenu()
 
   if (isCompactLayout.value) {
     navOpen.value = false
@@ -109,6 +143,7 @@ const handleNavigate = (route: RouteKey) => {
 }
 
 const handleLogout = () => {
+  closeProfileMenu()
   emit('logout')
 
   if (isCompactLayout.value) {
@@ -122,10 +157,14 @@ onMounted(() => {
     topbarClock.value = new Date()
   }, 30000)
   window.addEventListener('resize', syncLayout)
+  window.addEventListener('pointerdown', handleWindowPointerDown)
+  window.addEventListener('keydown', handleWindowKeyDown)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', syncLayout)
+  window.removeEventListener('pointerdown', handleWindowPointerDown)
+  window.removeEventListener('keydown', handleWindowKeyDown)
 
   if (clockTimer) {
     window.clearInterval(clockTimer)
@@ -215,33 +254,8 @@ onBeforeUnmount(() => {
       </nav>
 
       <div class="admin-status" :class="{ 'admin-status--active': hasAuthenticatedSession }">
-        <p class="admin-status__label">System Status</p>
-        <strong>
-          {{
-            adminSession.authenticated
-              ? 'Admin tools unlocked'
-              : customerSession.authenticated
-                ? 'Customer account signed in'
-                : 'All systems operational'
-          }}
-        </strong>
-        <span>
-          {{
-            adminSession.authenticated
-              ? 'Inventory controls are ready for protected changes.'
-              : customerSession.authenticated
-                ? 'Orders can now be attached directly to the signed-in customer profile.'
-                : 'Browse products, register customers, and sign in for account access.'
-          }}
-        </span>
-        <button
-          v-if="hasAuthenticatedSession"
-          type="button"
-          class="admin-status__button"
-          @click="handleLogout"
-        >
-          Logout
-        </button>
+        <strong>Developed by Janjan</strong>
+        <span>Ordermoto motorcycle ordering system.</span>
       </div>
     </aside>
 
@@ -273,14 +287,55 @@ onBeforeUnmount(() => {
             <span>{{ timestamp }}</span>
           </div>
 
-          <div class="profile-card">
-            <span class="profile-card__avatar">
-              {{ userPrimaryLabel.slice(0, 1).toUpperCase() }}
-            </span>
-            <span>
-              <strong>{{ userPrimaryLabel }}</strong>
-              <small>{{ userSecondaryLabel }}</small>
-            </span>
+          <div ref="profileMenuRef" class="profile-menu">
+            <button
+              v-if="hasAuthenticatedSession"
+              type="button"
+              class="profile-card profile-card--button"
+              :aria-expanded="profileMenuOpen"
+              aria-haspopup="menu"
+              @click="toggleProfileMenu"
+            >
+              <span class="profile-card__avatar">
+                {{ userPrimaryLabel.slice(0, 1).toUpperCase() }}
+              </span>
+              <span>
+                <strong>{{ userPrimaryLabel }}</strong>
+                <small>{{ userSecondaryLabel }}</small>
+              </span>
+              <span class="profile-card__caret" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path
+                    d="m6 9 6 6 6-6"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.8"
+                  />
+                </svg>
+              </span>
+            </button>
+
+            <div v-else class="profile-card">
+              <span class="profile-card__avatar">
+                {{ userPrimaryLabel.slice(0, 1).toUpperCase() }}
+              </span>
+              <span>
+                <strong>{{ userPrimaryLabel }}</strong>
+                <small>{{ userSecondaryLabel }}</small>
+              </span>
+            </div>
+
+            <div
+              v-if="profileMenuOpen && hasAuthenticatedSession"
+              class="profile-menu__panel"
+              role="menu"
+            >
+              <button type="button" class="profile-menu__item" role="menuitem" @click="handleLogout">
+                Logout
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -542,18 +597,6 @@ onBeforeUnmount(() => {
   font-size: 0.85rem;
 }
 
-.admin-status__button {
-  justify-self: start;
-  margin-top: 0.55rem;
-  border: none;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-  color: #ffffff;
-  cursor: pointer;
-  padding: 0.65rem 0.95rem;
-  font-weight: 700;
-}
-
 .workspace {
   display: grid;
   align-content: start;
@@ -664,6 +707,10 @@ onBeforeUnmount(() => {
   box-shadow: 0 0 0 6px rgba(34, 197, 94, 0.12);
 }
 
+.profile-menu {
+  position: relative;
+}
+
 .profile-card__avatar {
   display: inline-flex;
   align-items: center;
@@ -675,6 +722,12 @@ onBeforeUnmount(() => {
   color: #ffffff;
   font-weight: 800;
   flex-shrink: 0;
+}
+
+.profile-card--button {
+  border: 1px solid rgba(16, 24, 40, 0.08);
+  cursor: pointer;
+  text-align: left;
 }
 
 .profile-card span:last-child {
@@ -690,6 +743,50 @@ onBeforeUnmount(() => {
 .profile-card small {
   color: #717a89;
   font-size: 0.8rem;
+}
+
+.profile-card__caret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #717a89;
+  margin-left: 0.25rem;
+}
+
+.profile-card__caret svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.profile-menu__panel {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  min-width: 10rem;
+  padding: 0.5rem;
+  border: 1px solid rgba(16, 24, 40, 0.08);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 18px 36px rgba(15, 17, 22, 0.12);
+  z-index: 10;
+}
+
+.profile-menu__item {
+  width: 100%;
+  border: 0;
+  border-radius: 0.8rem;
+  background: transparent;
+  color: #11151c;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 0.8rem 0.95rem;
+  text-align: left;
+}
+
+.profile-menu__item:hover {
+  background: rgba(255, 106, 0, 0.08);
+  color: #ff6a00;
 }
 
 .banner {
@@ -779,7 +876,8 @@ onBeforeUnmount(() => {
   }
 
   .meta-pill,
-  .profile-card {
+  .profile-card,
+  .profile-menu {
     width: 100%;
   }
 }
@@ -811,6 +909,12 @@ onBeforeUnmount(() => {
   .profile-card {
     padding: 0.75rem 0.85rem;
     border-radius: 0.9rem;
+  }
+
+  .profile-menu__panel {
+    left: 0;
+    right: 0;
+    min-width: 0;
   }
 
   .profile-card strong,

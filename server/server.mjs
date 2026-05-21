@@ -3,6 +3,7 @@ import { constants } from 'node:fs'
 import { access, readFile } from 'node:fs/promises'
 import { extname, join, normalize } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { Prisma } from '@prisma/client'
 import {
   closeDatabase,
   createCustomer,
@@ -84,6 +85,31 @@ const sendText = (response, statusCode, payload) => {
   response.statusCode = statusCode
   response.setHeader('Content-Type', 'text/plain; charset=utf-8')
   response.end(payload)
+}
+
+const toUserFacingError = (error) => {
+  if (error instanceof Prisma.PrismaClientInitializationError) {
+    const friendlyError = new Error(
+      'Unable to reach the Supabase database right now. Check DATABASE_URL and DIRECT_URL, then restart the server.',
+    )
+    friendlyError.statusCode = 503
+    return friendlyError
+  }
+
+  if (
+    typeof error?.message === 'string' &&
+    /can't reach database server|error validating datasource `db`|prismaclientinitializationerror/i.test(
+      error.message,
+    )
+  ) {
+    const friendlyError = new Error(
+      'Unable to reach the Supabase database right now. Check DATABASE_URL and DIRECT_URL, then restart the server.',
+    )
+    friendlyError.statusCode = 503
+    return friendlyError
+  }
+
+  return error
 }
 
 const parseCookies = (cookieHeader = '') =>
@@ -447,8 +473,9 @@ const createAppServer = () =>
 
       await serveStaticFile(response, requestUrl.pathname === '/' ? 'index.html' : requestUrl.pathname)
     } catch (error) {
-      sendJson(response, error.statusCode ?? 500, {
-        message: error.message ?? 'Unexpected server error.',
+      const userFacingError = toUserFacingError(error)
+      sendJson(response, userFacingError.statusCode ?? 500, {
+        message: userFacingError.message ?? 'Unexpected server error.',
       })
     }
   })
