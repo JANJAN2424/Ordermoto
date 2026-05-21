@@ -15,6 +15,7 @@ import {
   initializeDatabase,
   listProducts,
   listOrders,
+  loginAccount,
   loginAdmin,
   loginCustomer,
   logoutAdmin,
@@ -29,7 +30,12 @@ const adminSessionCookieName = 'ordermoto_admin_session'
 const adminSessionMaxAgeSeconds = 60 * 60 * 8
 const customerSessionCookieName = 'ordermoto_customer_session'
 const customerSessionMaxAgeSeconds = 60 * 60 * 8
-const configuredClientOrigin = process.env.CLIENT_ORIGIN?.trim() ?? ''
+const forceClientOriginInDev =
+  String(process.env.FORCE_CLIENT_ORIGIN_IN_DEV ?? '').trim().toLowerCase() === 'true'
+const configuredClientOrigin =
+  process.env.NODE_ENV === 'production' || forceClientOriginInDev
+    ? process.env.CLIENT_ORIGIN?.trim() ?? ''
+    : ''
 const usesCrossOriginClient = Boolean(configuredClientOrigin)
 
 const contentTypes = {
@@ -129,59 +135,59 @@ const serializeCookie = (name, value, options = {}) => {
   return parts.join('; ')
 }
 
+const createAdminSessionCookie = (sessionToken) =>
+  serializeCookie(adminSessionCookieName, sessionToken, {
+    path: '/',
+    maxAge: adminSessionMaxAgeSeconds,
+    httpOnly: true,
+    sameSite: usesCrossOriginClient ? 'None' : 'Lax',
+    secure: usesCrossOriginClient || process.env.NODE_ENV === 'production',
+  })
+
+const createClearedAdminSessionCookie = () =>
+  serializeCookie(adminSessionCookieName, '', {
+    path: '/',
+    maxAge: 0,
+    httpOnly: true,
+    sameSite: usesCrossOriginClient ? 'None' : 'Lax',
+    secure: usesCrossOriginClient || process.env.NODE_ENV === 'production',
+  })
+
 const setAdminSessionCookie = (response, sessionToken) => {
-  response.setHeader(
-    'Set-Cookie',
-    serializeCookie(adminSessionCookieName, sessionToken, {
-      path: '/',
-      maxAge: adminSessionMaxAgeSeconds,
-      httpOnly: true,
-      sameSite: usesCrossOriginClient ? 'None' : 'Lax',
-      secure: usesCrossOriginClient || process.env.NODE_ENV === 'production',
-    }),
-  )
+  response.setHeader('Set-Cookie', createAdminSessionCookie(sessionToken))
 }
 
 const clearAdminSessionCookie = (response) => {
-  response.setHeader(
-    'Set-Cookie',
-    serializeCookie(adminSessionCookieName, '', {
-      path: '/',
-      maxAge: 0,
-      httpOnly: true,
-      sameSite: usesCrossOriginClient ? 'None' : 'Lax',
-      secure: usesCrossOriginClient || process.env.NODE_ENV === 'production',
-    }),
-  )
+  response.setHeader('Set-Cookie', createClearedAdminSessionCookie())
 }
 
 const getAdminSessionToken = (request) =>
   parseCookies(request.headers.cookie ?? '')[adminSessionCookieName] ?? ''
 
+const createCustomerSessionCookie = (sessionToken) =>
+  serializeCookie(customerSessionCookieName, sessionToken, {
+    path: '/',
+    maxAge: customerSessionMaxAgeSeconds,
+    httpOnly: true,
+    sameSite: usesCrossOriginClient ? 'None' : 'Lax',
+    secure: usesCrossOriginClient || process.env.NODE_ENV === 'production',
+  })
+
+const createClearedCustomerSessionCookie = () =>
+  serializeCookie(customerSessionCookieName, '', {
+    path: '/',
+    maxAge: 0,
+    httpOnly: true,
+    sameSite: usesCrossOriginClient ? 'None' : 'Lax',
+    secure: usesCrossOriginClient || process.env.NODE_ENV === 'production',
+  })
+
 const setCustomerSessionCookie = (response, sessionToken) => {
-  response.setHeader(
-    'Set-Cookie',
-    serializeCookie(customerSessionCookieName, sessionToken, {
-      path: '/',
-      maxAge: customerSessionMaxAgeSeconds,
-      httpOnly: true,
-      sameSite: usesCrossOriginClient ? 'None' : 'Lax',
-      secure: usesCrossOriginClient || process.env.NODE_ENV === 'production',
-    }),
-  )
+  response.setHeader('Set-Cookie', createCustomerSessionCookie(sessionToken))
 }
 
 const clearCustomerSessionCookie = (response) => {
-  response.setHeader(
-    'Set-Cookie',
-    serializeCookie(customerSessionCookieName, '', {
-      path: '/',
-      maxAge: 0,
-      httpOnly: true,
-      sameSite: usesCrossOriginClient ? 'None' : 'Lax',
-      secure: usesCrossOriginClient || process.env.NODE_ENV === 'production',
-    }),
-  )
+  response.setHeader('Set-Cookie', createClearedCustomerSessionCookie())
 }
 
 const getCustomerSessionToken = (request) =>
@@ -333,6 +339,29 @@ const createAppServer = () =>
         const { sessionToken, session } = await loginCustomer(payload)
         setCustomerSessionCookie(response, sessionToken)
         sendJson(response, 200, session)
+        return
+      }
+
+      if (request.method === 'POST' && requestUrl.pathname === '/api/login') {
+        const payload = await readJsonBody(request)
+        const result = await loginAccount(payload)
+
+        response.setHeader(
+          'Set-Cookie',
+          result.role === 'admin'
+            ? [
+                createAdminSessionCookie(result.sessionToken),
+                createClearedCustomerSessionCookie(),
+              ]
+            : [
+                createCustomerSessionCookie(result.sessionToken),
+                createClearedAdminSessionCookie(),
+              ],
+        )
+        sendJson(response, 200, {
+          role: result.role,
+          session: result.session,
+        })
         return
       }
 

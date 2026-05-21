@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "run-s db:prepare dev:serve",
+    "dev": "run-p dev:server dev:client",
+    "dev:setup": "run-s db:prepare",
     "dev:client": "vite",
     "dev:serve": "run-p dev:server dev:client",
     "dev:server": "node server/server.mjs",
@@ -13,6 +14,7 @@
     "start": "node server/server.mjs",
     "start:prod": "node server/start-production.mjs",
     "start:server": "node server/server.mjs",
+    "studio": "node scripts/prisma-studio.mjs",
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
     "db:prepare": "run-s db:generate db:push",

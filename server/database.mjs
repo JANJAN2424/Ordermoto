@@ -26,6 +26,7 @@ if (!/^postgres(ql)?:\/\//i.test(connectionString)) {
 const prisma = new PrismaClient()
 const sessionDurationMs = 1000 * 60 * 60 * 8
 const defaultAdminUsername = process.env.ADMIN_USERNAME?.trim() || 'admin'
+const defaultAdminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase() || 'masteradmin@gmail.com'
 const defaultAdminPassword = process.env.ADMIN_PASSWORD?.trim() || 'admin123'
 const defaultAdminDisplayName =
   process.env.ADMIN_DISPLAY_NAME?.trim() || 'Ordermoto Administrator'
@@ -147,6 +148,7 @@ const serializeCustomer = (customer) => ({
 const serializeAdminAccount = (adminUser) => ({
   id: adminUser.id,
   username: adminUser.username,
+  email: adminUser.email ?? null,
   displayName: adminUser.displayName,
   createdAt: adminUser.createdAt,
 })
@@ -271,6 +273,29 @@ const getCustomerSessionRecord = async (sessionToken, client = prisma) => {
   return session
 }
 
+const createAdminSessionRecord = async (adminUser, client = prisma) => {
+  const sessionToken = createSessionToken()
+  const createdAt = nowIso()
+  const expiresAt = new Date(Date.now() + sessionDurationMs).toISOString()
+
+  const session = await client.adminSession.create({
+    data: {
+      sessionTokenHash: hashSessionToken(sessionToken),
+      adminUserId: adminUser.id,
+      createdAt,
+      expiresAt,
+    },
+    include: {
+      adminUser: true,
+    },
+  })
+
+  return {
+    sessionToken,
+    session: serializeAdminSession(session),
+  }
+}
+
 export const initializeDatabase = async () => {
   await prisma.$connect()
 
@@ -288,11 +313,13 @@ export const initializeDatabase = async () => {
     },
     create: {
       username: defaultAdminUsername,
+      email: defaultAdminEmail,
       displayName: defaultAdminDisplayName,
       passwordHash: hashPassword(defaultAdminPassword),
       createdAt: nowIso(),
     },
     update: {
+      email: defaultAdminEmail,
       displayName: defaultAdminDisplayName,
       passwordHash: hashPassword(defaultAdminPassword),
     },
@@ -362,42 +389,74 @@ export const getCustomerSessionState = async (sessionToken) => {
 }
 
 export const loginAdmin = async (input) => {
+  const email = normalizeEmail(input.email ?? input.username)
   const username = input.username?.trim()
   const password = input.password?.trim()
 
-  if (!username || !password) {
-    throw badRequest('Enter the admin username and password.')
+  if ((!email && !username) || !password) {
+    throw badRequest('Enter the admin email or username and password.')
   }
 
-  const adminUser = await prisma.adminUser.findUnique({
+  const adminUser =
+    (email
+      ? await prisma.adminUser.findFirst({
+          where: {
+            email,
+          },
+        })
+      : null) ||
+    (username
+      ? await prisma.adminUser.findUnique({
+          where: {
+            username,
+          },
+        })
+      : null)
+
+  if (!adminUser || !verifyPassword(password, adminUser.passwordHash)) {
+    throw unauthorized('Invalid admin email/username or password.')
+  }
+
+  return createAdminSessionRecord(adminUser)
+}
+
+export const loginAccount = async (input) => {
+  const email = normalizeEmail(input.email)
+  const password = input.password?.trim()
+
+  if (!email || !password) {
+    throw badRequest('Enter your email and password.')
+  }
+
+  const adminUser = await prisma.adminUser.findFirst({
     where: {
-      username,
+      email,
     },
   })
 
-  if (!adminUser || !verifyPassword(password, adminUser.passwordHash)) {
-    throw unauthorized('Invalid admin username or password.')
+  if (adminUser) {
+    if (!verifyPassword(password, adminUser.passwordHash)) {
+      throw unauthorized('Invalid admin email or password.')
+    }
+
+    const session = await createAdminSessionRecord(adminUser)
+
+    return {
+      role: 'admin',
+      sessionToken: session.sessionToken,
+      session: session.session,
+    }
   }
 
-  const sessionToken = createSessionToken()
-  const createdAt = nowIso()
-  const expiresAt = new Date(Date.now() + sessionDurationMs).toISOString()
-
-  const session = await prisma.adminSession.create({
-    data: {
-      sessionTokenHash: hashSessionToken(sessionToken),
-      adminUserId: adminUser.id,
-      createdAt,
-      expiresAt,
-    },
-    include: {
-      adminUser: true,
-    },
+  const customerSession = await loginCustomer({
+    email,
+    password,
   })
 
   return {
-    sessionToken,
-    session: serializeAdminSession(session),
+    role: 'customer',
+    sessionToken: customerSession.sessionToken,
+    session: customerSession.session,
   }
 }
 
@@ -517,6 +576,19 @@ export const createCustomer = async (input) => {
 
   if (password.length < 6) {
     throw badRequest('Password must be at least 6 characters long.')
+  }
+
+  const existingAdmin = await prisma.adminUser.findFirst({
+    where: {
+      email,
+    },
+    select: {
+      id: true,
+    },
+  })
+
+  if (existingAdmin) {
+    throw badRequest('This email is reserved for an admin account. Use a different customer email.')
   }
 
   const existingCustomer = await prisma.customer.findUnique({

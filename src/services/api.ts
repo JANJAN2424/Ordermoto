@@ -10,6 +10,8 @@ import type {
   CustomerSessionState,
   OrderSubmissionResponse,
   RegistrationInput,
+  LoginInput,
+  LoginResponse,
   UpdateProductInput,
   UpdateProductResponse,
   UpdateOrderStatusInput,
@@ -17,7 +19,11 @@ import type {
   DeleteProductResponse,
 } from '../types/system'
 
-const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/, '') ?? ''
+const rawConfiguredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/, '') ?? ''
+const forceConfiguredApiBaseUrl =
+  String(import.meta.env.VITE_FORCE_API_BASE_URL ?? '').trim().toLowerCase() === 'true'
+const configuredApiBaseUrl =
+  import.meta.env.DEV && !forceConfiguredApiBaseUrl ? '' : rawConfiguredApiBaseUrl
 
 const createRequestUrl = (path: string) => {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
@@ -26,8 +32,8 @@ const createRequestUrl = (path: string) => {
 
 const getRoutingHint = (path: string) =>
   configuredApiBaseUrl
-    ? `Check VITE_API_BASE_URL, CLIENT_ORIGIN, and confirm the Node API server is reachable for ${path}.`
-    : `Check that the Node server is running and that requests to ${path} reach it.`
+    ? `Check VITE_API_BASE_URL, CLIENT_ORIGIN, and confirm the Node API server is reachable for ${path}. For local development, leave VITE_API_BASE_URL empty so Vite can proxy /api requests to the local Node server.`
+    : `Check that the Node server is running and that Vite's /api proxy reaches ${path}. Set VITE_FORCE_API_BASE_URL=true only when you intentionally want local dev to call the remote API.`
 
 const getResponsePreview = (text: string) =>
   text.replace(/\s+/g, ' ').trim().slice(0, 160)
@@ -106,6 +112,12 @@ export const getBootstrapData = () => request<BootstrapData>('/api/bootstrap')
 export const getAdminSession = () => request<AdminSessionState>('/api/admin/session')
 
 export const getCustomerSession = () => request<CustomerSessionState>('/api/customer/session')
+
+export const login = (payload: LoginInput) =>
+  request<LoginResponse>('/api/login', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
 
 export const loginAdmin = (payload: AdminLoginInput) =>
   request<AdminSessionState>('/api/admin/login', {

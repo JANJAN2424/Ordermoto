@@ -52,6 +52,7 @@ model CustomerSession {
 model AdminUser {
   id           Int            @id @default(autoincrement())
   username     String         @unique
+  email        String?
   displayName  String         @map("display_name")
   passwordHash String         @map("password_hash")
   createdAt    String         @map("created_at")

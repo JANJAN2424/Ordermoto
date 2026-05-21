@@ -16,21 +16,19 @@ import {
   getAdminSession,
   getBootstrapData,
   getCustomerSession,
-  loginAdmin as requestAdminLogin,
-  loginCustomer as requestCustomerLogin,
+  login as requestLogin,
   logoutAdmin as requestAdminLogout,
   logoutCustomer as requestCustomerLogout,
   updateProduct as requestUpdateProduct,
   updateOrderStatus as requestUpdateOrderStatus,
 } from './services/api'
 import type {
-  AdminLoginInput,
   AdminSessionState,
   CreateProductInput,
   CreateOrderInput,
   Customer,
-  CustomerLoginInput,
   CustomerSessionState,
+  LoginInput,
   Order,
   Product,
   RegistrationInput,
@@ -213,8 +211,25 @@ const updateOrderStatus = async (payload: UpdateOrderStatusInput) => {
   return response.order
 }
 
-const signInCustomer = async (payload: CustomerLoginInput) => {
-  const session = await requestCustomerLogin(payload)
+const signIn = async (payload: LoginInput) => {
+  const response = await requestLogin(payload)
+
+  if (response.role === 'admin') {
+    if (customerSession.value.authenticated) {
+      try {
+        await requestCustomerLogout()
+      } catch {
+        // Keep the new admin session even if the previous customer logout request fails.
+      }
+
+      customerSession.value = createEmptyCustomerSession()
+    }
+
+    adminSession.value = response.session
+    errorMessage.value = ''
+    navigate('admin-inventory')
+    return response
+  }
 
   if (adminSession.value.authenticated) {
     try {
@@ -226,29 +241,10 @@ const signInCustomer = async (payload: CustomerLoginInput) => {
     adminSession.value = createEmptyAdminSession()
   }
 
-  customerSession.value = session
+  customerSession.value = response.session
   errorMessage.value = ''
   navigate('orders')
-  return session
-}
-
-const signInAdmin = async (payload: AdminLoginInput) => {
-  const session = await requestAdminLogin(payload)
-
-  if (customerSession.value.authenticated) {
-    try {
-      await requestCustomerLogout()
-    } catch {
-      // Keep the new admin session even if the previous customer logout request fails.
-    }
-
-    customerSession.value = createEmptyCustomerSession()
-  }
-
-  adminSession.value = session
-  errorMessage.value = ''
-  navigate('admin-inventory')
-  return session
+  return response
 }
 
 const signOutCurrentSession = async () => {
@@ -304,9 +300,7 @@ onBeforeUnmount(() => {
       !adminSession.authenticated &&
       !customerSession.authenticated
     "
-    :initial-mode="currentRoute === 'admin' ? 'admin' : 'customer'"
-    :login-customer="signInCustomer"
-    :login-admin="signInAdmin"
+    :login="signIn"
     @navigate="navigate"
   />
 

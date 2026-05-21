@@ -46,6 +46,7 @@ DIRECT_URL="postgresql://postgres.<project-ref>:<password>@<direct-host>:5432/po
 
 ```env
 ADMIN_USERNAME="masteradmin"
+ADMIN_EMAIL="masteradmin@gmail.com"
 ADMIN_PASSWORD="masteradmin123"
 ADMIN_DISPLAY_NAME="Ordermoto Administrator"
 ```
@@ -71,7 +72,10 @@ npm run db:push
 npm run dev
 ```
 
-Customer registration and customer password login now run through Supabase Auth. Admin login still uses the app's existing server-side credentials.
+For local development, the app now ignores `VITE_API_BASE_URL` by default so Vite can proxy `/api/*` to `http://127.0.0.1:3001` using [vite.config.ts](./vite.config.ts). If you intentionally want local dev to call a remote API instead, set `VITE_FORCE_API_BASE_URL=true`. If you also need the Node server to honor `CLIENT_ORIGIN` in development, set `FORCE_CLIENT_ORIGIN_IN_DEV=true`.
+If you need to sync Prisma after schema or environment changes, run `npm run dev:setup` manually before `npm run dev`.
+
+Customer registration runs through Supabase Auth, and both customers and admins now use the same email/password sign-in page. The seeded admin account defaults to `masteradmin@gmail.com`.
 
 ## Project Setup
 
@@ -84,6 +88,14 @@ npm install
 ```sh
 npm run dev
 ```
+
+### Open Prisma Studio
+
+```sh
+npm run studio
+```
+
+If Prisma Studio has trouble starting on Windows, this repo's `studio` script already disables Prisma's checkpoint cache that can trigger the `Unable to communicate with Prisma Client` error.
 
 ### Type-Check, Compile and Minify for Production
 
@@ -110,6 +122,7 @@ SUPABASE_SERVICE_ROLE_KEY="eyJ..."
 DATABASE_URL="postgresql://postgres.<project-ref>:<password>@<pooler-host>:6543/postgres?pgbouncer=true"
 DIRECT_URL="postgresql://postgres.<project-ref>:<password>@<direct-host>:5432/postgres"
 ADMIN_USERNAME="masteradmin"
+ADMIN_EMAIL="masteradmin@gmail.com"
 ADMIN_PASSWORD="change-this-before-production"
 ADMIN_DISPLAY_NAME="Ordermoto Administrator"
 ```

@@ -42,6 +42,7 @@ export interface Customer {
 export interface AdminAccount {
   id: number
   username: string
+  email: string | null
   displayName: string
   createdAt: string
 }
@@ -91,6 +92,11 @@ export interface CustomerLoginInput {
   password: string
 }
 
+export interface LoginInput {
+  email: string
+  password: string
+}
+
 export interface CreateOrderInput {
   customerId: number
   deliveryMethod: DeliveryMethod
@@ -128,9 +134,20 @@ export interface BootstrapData {
 }
 
 export interface AdminLoginInput {
-  username: string
+  username?: string
+  email?: string
   password: string
 }
+
+export type LoginResponse =
+  | {
+      role: 'admin'
+      session: AdminSessionState
+    }
+  | {
+      role: 'customer'
+      session: CustomerSessionState
+    }
 
 export interface OrderSubmissionResponse {
   order: Order
