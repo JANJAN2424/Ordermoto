@@ -42,6 +42,7 @@ const stockLabel = (stock: number) => {
 }
 
 const uploadingProductId = ref<number | null>(null)
+const deletingProductId = ref<number | null>(null)
 const feedbackByProductId = reactive<Record<number, { message: string; tone: 'success' | 'error' }>>({})
 const fileInputKeys = reactive<Record<number, number>>({})
 const maxImageSizeLabel = formatProductImageSizeLimit()
@@ -61,6 +62,9 @@ const getImageActionLabel = (product: Product) => {
 
   return product.imageUrl ? 'Replace image' : 'Add image'
 }
+
+const isProductBusy = (productId: number) =>
+  uploadingProductId.value === productId || deletingProductId.value === productId
 
 const updateProductImage = async (product: Product, event: Event) => {
   const input = event.target as HTMLInputElement
@@ -122,6 +126,35 @@ const removeProductImage = async (product: Product) => {
     uploadingProductId.value = null
   }
 }
+
+const deleteProductCard = async (product: Product) => {
+  if (!props.deleteProduct) {
+    setFeedback(product.id, 'error', 'Delete is not available right now.')
+    return
+  }
+
+  const confirmed = window.confirm(
+    `Delete ${product.name}? This cannot be undone, and motorcycles already used in saved orders cannot be deleted.`,
+  )
+
+  if (!confirmed) {
+    return
+  }
+
+  deletingProductId.value = product.id
+
+  try {
+    await props.deleteProduct(product.id)
+  } catch (error) {
+    setFeedback(
+      product.id,
+      'error',
+      error instanceof Error ? error.message : 'Unable to delete the motorcycle right now.',
+    )
+  } finally {
+    deletingProductId.value = null
+  }
+}
 </script>
 
 <template>
@@ -166,12 +199,12 @@ const removeProductImage = async (product: Product) => {
       </div>
 
       <div v-if="props.editable" class="product-card__actions">
-        <label class="action-button action-button--upload" :class="{ 'is-disabled': uploadingProductId === product.id }">
+        <label class="action-button action-button--upload" :class="{ 'is-disabled': isProductBusy(product.id) }">
           <input
             :key="fileInputKeys[product.id] ?? 0"
             type="file"
             :accept="acceptedProductImageMimeTypes"
-            :disabled="uploadingProductId === product.id"
+            :disabled="isProductBusy(product.id)"
             @change="updateProductImage(product, $event)"
           />
           {{ getImageActionLabel(product) }}
@@ -181,10 +214,19 @@ const removeProductImage = async (product: Product) => {
           v-if="product.imageUrl"
           type="button"
           class="action-button action-button--secondary"
-          :disabled="uploadingProductId === product.id"
+          :disabled="isProductBusy(product.id)"
           @click="removeProductImage(product)"
         >
           Remove image
+        </button>
+
+        <button
+          type="button"
+          class="action-button action-button--danger"
+          :disabled="isProductBusy(product.id)"
+          @click="deleteProductCard(product)"
+        >
+          {{ deletingProductId === product.id ? 'Deleting...' : 'Delete motorcycle' }}
         </button>
       </div>
 
@@ -343,6 +385,12 @@ const removeProductImage = async (product: Product) => {
 .action-button.is-disabled {
   cursor: progress;
   opacity: 0.7;
+}
+
+.action-button--danger {
+  border-color: rgba(143, 61, 20, 0.24);
+  background: linear-gradient(135deg, #fff3ec, #ffe6d8);
+  color: #8f3d14;
 }
 
 .product-card__hint {
