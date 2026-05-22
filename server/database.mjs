@@ -8,6 +8,12 @@ import {
   registerCustomerAuthUser,
   signInCustomerWithSupabase,
 } from './supabase-auth.mjs'
+import {
+  deleteProductImageFromStorage,
+  isProductImageDataUrl,
+  isProductImagePublicUrl,
+  uploadProductImageToStorage,
+} from './supabase-storage.mjs'
 
 const connectionString = process.env.DATABASE_URL
 
@@ -37,6 +43,7 @@ const seededProducts = [
     name: 'Honda Atlas 160',
     category: 'City commuter',
     description: 'Efficient, lightweight motorcycle built for daily city rides.',
+    imageUrl: '',
     price: 4250,
     stock: 4,
     leadTimeDays: 1,
@@ -47,6 +54,7 @@ const seededProducts = [
     name: 'Yamaha Trailhawk 250',
     category: 'Dual-sport',
     description: 'Balanced dual-sport bike for road trips and light trail use.',
+    imageUrl: '',
     price: 6100,
     stock: 3,
     leadTimeDays: 3,
@@ -57,6 +65,7 @@ const seededProducts = [
     name: 'Kawasaki Bolt 400',
     category: 'Street performance',
     description: 'A premium mid-range street motorcycle with strong acceleration.',
+    imageUrl: '',
     price: 7850,
     stock: 2,
     leadTimeDays: 5,
@@ -67,6 +76,7 @@ const seededProducts = [
     name: 'Suzuki Glide 125',
     category: 'Delivery scooter',
     description: 'Cargo-friendly scooter for delivery teams and urban businesses.',
+    imageUrl: '',
     price: 2950,
     stock: 6,
     leadTimeDays: 1,
@@ -83,6 +93,8 @@ const allowedOrderStatuses = new Set([
   'Delivered',
   'Cancelled',
 ])
+const productImageDataUrlPattern = /^data:image\/(?:png|jpe?g|webp|gif|avif);base64,[a-z0-9+/=]+$/i
+const maxProductImageDataUrlLength = 6 * 1024 * 1024
 
 const badRequest = (message) => {
   const error = new Error(message)
@@ -99,8 +111,29 @@ const unauthorized = (message) => {
 const nowIso = () => new Date().toISOString()
 const normalizeEmail = (value) => value?.trim().toLowerCase() ?? ''
 const normalizeUsername = (value) => value?.trim().toLowerCase() ?? ''
+const normalizeProductImage = (value) => (typeof value === 'string' ? value.trim() : '')
 const readAuthMetadataText = (record, key) =>
   typeof record?.[key] === 'string' ? record[key].trim() : ''
+
+const validateProductImage = (value) => {
+  if (!value) {
+    return ''
+  }
+
+  if (isProductImagePublicUrl(value)) {
+    return value
+  }
+
+  if (value.length > maxProductImageDataUrlLength) {
+    throw badRequest('Motorcycle image is too large. Upload an image smaller than 4 MB.')
+  }
+
+  if (!productImageDataUrlPattern.test(value)) {
+    throw badRequest('Upload a valid motorcycle image in JPG, PNG, GIF, WebP, or AVIF format.')
+  }
+
+  return value
+}
 
 const hashPassword = (password) => {
   const salt = randomBytes(16).toString('hex')
@@ -131,6 +164,7 @@ const serializeProduct = (product) => ({
   name: product.name,
   category: product.category,
   description: product.description,
+  imageUrl: product.imageUrl ?? '',
   price: Number(product.price),
   stock: product.stock,
   leadTimeDays: product.leadTimeDays,
@@ -700,6 +734,7 @@ export const createProduct = async (input) => {
   const name = input.name?.trim()
   const category = input.category?.trim()
   const description = input.description?.trim()
+  const imageUrl = validateProductImage(normalizeProductImage(input.imageUrl))
   const price = Number(input.price)
   const stock = Number(input.stock)
   const leadTimeDays = Number(input.leadTimeDays)
@@ -707,6 +742,10 @@ export const createProduct = async (input) => {
 
   if (!sku || !name || !category || !description) {
     throw badRequest('Please complete all motorcycle fields before saving.')
+  }
+
+  if (!imageUrl) {
+    throw badRequest('Attach a motorcycle image before saving.')
   }
 
   if (!Number.isFinite(price) || price <= 0) {
@@ -734,20 +773,42 @@ export const createProduct = async (input) => {
     throw badRequest('A motorcycle with this SKU already exists in the catalog.')
   }
 
-  const product = await prisma.product.create({
-    data: {
-      sku,
-      name,
-      category,
-      description,
-      price,
-      stock,
-      leadTimeDays,
-      featured: featured ? 1 : 0,
-    },
-  })
+  const uploadedImage =
+    isProductImageDataUrl(imageUrl)
+      ? await uploadProductImageToStorage({
+          imageDataUrl: imageUrl,
+          sku,
+          productName: name,
+        })
+      : null
 
-  return serializeProduct(product)
+  try {
+    const product = await prisma.product.create({
+      data: {
+        sku,
+        name,
+        category,
+        description,
+        imageUrl: uploadedImage?.publicUrl ?? imageUrl,
+        price,
+        stock,
+        leadTimeDays,
+        featured: featured ? 1 : 0,
+      },
+    })
+
+    return serializeProduct(product)
+  } catch (error) {
+    if (uploadedImage?.publicUrl) {
+      try {
+        await deleteProductImageFromStorage(uploadedImage.publicUrl)
+      } catch {
+        // Keep the original database error if storage rollback fails.
+      }
+    }
+
+    throw error
+  }
 }
 
 export const updateProduct = async (input) => {
@@ -757,6 +818,7 @@ export const updateProduct = async (input) => {
   const name = input.name?.trim()
   const category = input.category?.trim()
   const description = input.description?.trim()
+  const imageUrl = validateProductImage(normalizeProductImage(input.imageUrl))
   const price = Number(input.price)
   const stock = Number(input.stock)
   const leadTimeDays = Number(input.leadTimeDays)
@@ -788,6 +850,7 @@ export const updateProduct = async (input) => {
     },
     select: {
       id: true,
+      imageUrl: true,
     },
   })
 
@@ -808,21 +871,60 @@ export const updateProduct = async (input) => {
     throw badRequest('Another motorcycle already uses this SKU.')
   }
 
-  const product = await prisma.product.update({
-    where: {
-      id: productId,
-    },
-    data: {
-      sku,
-      name,
-      category,
-      description,
-      price,
-      stock,
-      leadTimeDays,
-      featured: featured ? 1 : 0,
-    },
-  })
+  const previousImageUrl = existingProduct.imageUrl ?? ''
+  const uploadedImage =
+    isProductImageDataUrl(imageUrl)
+      ? await uploadProductImageToStorage({
+          imageDataUrl: imageUrl,
+          sku,
+          productName: name,
+        })
+      : null
+  const nextImageUrl = uploadedImage?.publicUrl ?? imageUrl
+
+  let product
+
+  try {
+    product = await prisma.product.update({
+      where: {
+        id: productId,
+      },
+      data: {
+        sku,
+        name,
+        category,
+        description,
+        imageUrl: nextImageUrl,
+        price,
+        stock,
+        leadTimeDays,
+        featured: featured ? 1 : 0,
+      },
+    })
+  } catch (error) {
+    if (uploadedImage?.publicUrl) {
+      try {
+        await deleteProductImageFromStorage(uploadedImage.publicUrl)
+      } catch {
+        // Keep the original database error if storage rollback fails.
+      }
+    }
+
+    throw error
+  }
+
+  const shouldDeletePreviousImage =
+    Boolean(previousImageUrl) &&
+    previousImageUrl !== nextImageUrl &&
+    (nextImageUrl === '' || Boolean(uploadedImage))
+
+  if (shouldDeletePreviousImage) {
+    try {
+      await deleteProductImageFromStorage(previousImageUrl)
+    } catch (error) {
+      console.warn(error?.message ?? 'Unable to clean up the previous motorcycle image.')
+    }
+  }
 
   return serializeProduct(product)
 }
@@ -841,6 +943,7 @@ export const deleteProduct = async (input) => {
     select: {
       id: true,
       name: true,
+      imageUrl: true,
       _count: {
         select: {
           orderItems: true,
@@ -864,6 +967,14 @@ export const deleteProduct = async (input) => {
       id: productId,
     },
   })
+
+  if (existingProduct.imageUrl) {
+    try {
+      await deleteProductImageFromStorage(existingProduct.imageUrl)
+    } catch (error) {
+      console.warn(error?.message ?? 'Unable to remove the motorcycle image from Supabase Storage.')
+    }
+  }
 }
 
 export const createOrder = async (input) => {

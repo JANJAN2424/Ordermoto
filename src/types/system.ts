@@ -24,6 +24,7 @@ export interface Product {
   name: string
   category: string
   description: string
+  imageUrl: string
   price: number
   stock: number
   leadTimeDays: number
@@ -112,6 +113,7 @@ export interface CreateProductInput {
   name: string
   category: string
   description: string
+  imageUrl: string
   price: number
   stock: number
   leadTimeDays: number

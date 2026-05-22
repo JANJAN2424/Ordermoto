@@ -15,8 +15,8 @@ defineProps<{
         <h2>Available motorcycle products</h2>
       </div>
       <p>
-        This page shows the motorcycles currently available in the system, including price,
-        stock, and lead time information.
+        This page shows the motorcycles currently available in the system, including photos,
+        price, stock, and lead time information.
       </p>
     </header>
 

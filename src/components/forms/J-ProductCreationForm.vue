@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
 import type { CreateProductInput, Product } from '../../types/system'
+import {
+  acceptedProductImageMimeTypes,
+  formatProductImageSizeLimit,
+  readProductImageFile,
+  supportedProductImageLabel,
+} from '../../utils/productImages'
 
 const props = defineProps<{
   submitProduct: (payload: CreateProductInput) => Promise<Product>
@@ -20,6 +26,10 @@ const form = reactive({
 const submitting = ref(false)
 const successMessage = ref('')
 const errorMessage = ref('')
+const imagePreview = ref('')
+const imageName = ref('')
+const imageInputKey = ref(0)
+const maxImageSizeLabel = formatProductImageSizeLimit()
 
 const resetForm = () => {
   form.sku = ''
@@ -30,9 +40,45 @@ const resetForm = () => {
   form.stock = ''
   form.leadTimeDays = '1'
   form.featured = false
+  imagePreview.value = ''
+  imageName.value = ''
+  imageInputKey.value += 1
+}
+
+const clearImage = () => {
+  imagePreview.value = ''
+  imageName.value = ''
+  imageInputKey.value += 1
+}
+
+const handleImageChange = async (event: Event) => {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+
+  if (!file) {
+    clearImage()
+    return
+  }
+
+  errorMessage.value = ''
+
+  try {
+    imagePreview.value = await readProductImageFile(file)
+    imageName.value = file.name
+  } catch (error) {
+    clearImage()
+    errorMessage.value =
+      error instanceof Error ? error.message : 'Unable to attach the motorcycle image.'
+  }
 }
 
 const handleSubmit = async () => {
+  if (!imagePreview.value) {
+    successMessage.value = ''
+    errorMessage.value = 'Attach a motorcycle image before saving.'
+    return
+  }
+
   submitting.value = true
   successMessage.value = ''
   errorMessage.value = ''
@@ -43,6 +89,7 @@ const handleSubmit = async () => {
       name: form.name,
       category: form.category,
       description: form.description,
+      imageUrl: imagePreview.value,
       price: Number(form.price),
       stock: Number(form.stock),
       leadTimeDays: Number(form.leadTimeDays),
@@ -124,6 +171,29 @@ const handleSubmit = async () => {
         />
       </label>
 
+      <label class="form-grid__wide">
+        Motorcycle image
+        <input
+          :key="imageInputKey"
+          type="file"
+          :accept="acceptedProductImageMimeTypes"
+          :required="!imagePreview"
+          @change="handleImageChange"
+        />
+        <small class="input-helper">
+          Upload a {{ supportedProductImageLabel }} file up to {{ maxImageSizeLabel }}. Image is required for new motorcycles and will be stored in Supabase Storage.
+        </small>
+      </label>
+
+      <div v-if="imagePreview" class="image-preview form-grid__wide">
+        <img :src="imagePreview" :alt="form.name ? `${form.name} preview` : 'Motorcycle image preview'" />
+        <div class="image-preview__copy">
+          <strong>{{ imageName || 'Selected image' }}</strong>
+          <p>This photo will be uploaded to Supabase Storage and shown in the customer motorcycle catalog and order page.</p>
+        </div>
+        <button type="button" class="secondary-button" @click="clearImage">Remove image</button>
+      </div>
+
       <label class="toggle-row form-grid__wide">
         <input v-model="form.featured" type="checkbox" />
         <span>Mark this motorcycle as featured in the list.</span>
@@ -135,7 +205,7 @@ const handleSubmit = async () => {
     <p v-if="successMessage" class="feedback feedback--success">{{ successMessage }}</p>
     <p v-if="errorMessage" class="feedback feedback--error">{{ errorMessage }}</p>
 
-    <button class="submit-button" type="submit" :disabled="submitting">
+    <button class="submit-button" type="submit" :disabled="submitting || !imagePreview">
       {{ submitting ? 'Saving motorcycle...' : 'Add motorcycle' }}
     </button>
   </form>
@@ -207,8 +277,55 @@ const handleSubmit = async () => {
   resize: vertical;
 }
 
+.form-grid input[type='file'] {
+  padding: 0.7rem 0.85rem;
+}
+
 .form-grid__wide {
   grid-column: 1 / -1;
+}
+
+.input-helper {
+  color: #7b6c5d;
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+.image-preview {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+  border: 1px solid rgba(94, 70, 47, 0.12);
+  border-radius: 1.2rem;
+  background: rgba(255, 255, 255, 0.76);
+  padding: 0.9rem;
+}
+
+.image-preview img {
+  width: 100%;
+  height: 120px;
+  border-radius: 0.95rem;
+  object-fit: cover;
+}
+
+.image-preview__copy {
+  color: #4b3b2e;
+}
+
+.image-preview__copy p {
+  margin-top: 0.35rem;
+  color: #6b5c4c;
+}
+
+.secondary-button {
+  border: 1px solid rgba(94, 70, 47, 0.16);
+  border-radius: 999px;
+  background: #fff;
+  color: #3d2f22;
+  cursor: pointer;
+  padding: 0.85rem 1rem;
+  font-weight: 700;
 }
 
 .toggle-row {
@@ -274,6 +391,10 @@ const handleSubmit = async () => {
   .form-grid {
     grid-template-columns: 1fr;
     display: grid;
+  }
+
+  .image-preview {
+    grid-template-columns: 1fr;
   }
 
   .form-card__header p:last-child {

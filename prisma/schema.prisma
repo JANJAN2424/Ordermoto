@@ -14,6 +14,7 @@ model Product {
   name         String
   category     String
   description  String
+  imageUrl     String      @default("") @map("image_url")
   price        Float
   stock        Int         @default(0)
   leadTimeDays Int         @default(1) @map("lead_time_days")

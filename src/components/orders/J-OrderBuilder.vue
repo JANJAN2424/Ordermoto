@@ -33,10 +33,25 @@ const formatCurrency = (value: number) => currencyFormatter.format(value)
 
     <article v-for="product in products" :key="product.id" class="item-card">
       <div class="item-card__top">
-        <div>
-          <p class="item-card__sku">{{ product.sku }}</p>
-          <h3>{{ product.name }}</h3>
-          <p>{{ product.description }}</p>
+        <div class="item-card__hero">
+          <div class="item-card__media">
+            <img
+              v-if="product.imageUrl"
+              :src="product.imageUrl"
+              :alt="`${product.name} photo`"
+              loading="lazy"
+            />
+            <div v-else class="item-card__placeholder">
+              <span>{{ product.category }}</span>
+              <small>No image yet</small>
+            </div>
+          </div>
+
+          <div>
+            <p class="item-card__sku">{{ product.sku }}</p>
+            <h3>{{ product.name }}</h3>
+            <p>{{ product.description }}</p>
+          </div>
         </div>
 
         <StatusBadge :label="product.category" tone="info" />
@@ -121,12 +136,47 @@ const formatCurrency = (value: number) => currencyFormatter.format(value)
   gap: 1rem;
 }
 
+.item-card__hero {
+  display: grid;
+  grid-template-columns: 148px minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.item-card__media {
+  overflow: hidden;
+  border-radius: 1rem;
+  background:
+    linear-gradient(135deg, rgba(255, 126, 49, 0.14), rgba(255, 241, 225, 0.9));
+  aspect-ratio: 4 / 3;
+}
+
+.item-card__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.item-card__placeholder {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 0.3rem;
+  height: 100%;
+  padding: 0.9rem;
+}
+
+.item-card__placeholder span,
 .item-card__sku {
   color: #8d7f6f;
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.item-card__placeholder small {
+  color: #6b5c4c;
 }
 
 .item-card h3 {
@@ -195,6 +245,10 @@ const formatCurrency = (value: number) => currencyFormatter.format(value)
   .item-card__top,
   .item-card__bottom {
     display: grid;
+  }
+
+  .item-card__hero {
+    grid-template-columns: 1fr;
   }
 
   .panel__header p:last-child {
