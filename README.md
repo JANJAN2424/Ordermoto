@@ -157,21 +157,6 @@ Health check endpoint:
 /api/health
 ```
 
-### Docker deployment
-
-This repo includes a [Dockerfile](./Dockerfile) for Docker-friendly hosts.
-
-Build the image:
-
-```sh
-docker build -t ordermoto .
-```
-
-Run the container:
-
-```sh
-docker run --env-file .env.production -p 3001:3001 ordermoto
-```
 
 ### Notes
 
